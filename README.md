@@ -21,7 +21,7 @@
 
 ## 🌟 Overview
 
-**Solframe Studio** is a standalone, self-contained desktop generative AI suite engineered for 100% private, offline inference. Combining **`stable-diffusion.cpp`** (supporting FLUX.2 Klein, SDXL Lightning, and standard SD checkpoints) with **`llama.cpp`** (running GGUF text models with full GPU offloading), Solframe Studio brings high-performance generative AI directly to consumer hardware with zero subscription fees, zero cloud telemetry, and complete offline autonomy.
+**Solframe Studio** is a standalone, self-contained desktop generative AI suite engineered for 100% private, offline inference. Combining **`stable-diffusion.cpp`** (supporting FLUX.2 Klein, SDXL Lightning, and standard SD checkpoints), **diffusers-based video engines** (LTX-Video, Wan 2.2), and **`llama.cpp`** (running GGUF text models with full GPU offloading), Solframe Studio brings high-performance generative AI directly to consumer hardware with zero subscription fees, zero cloud telemetry, and complete offline autonomy.
 
 > **Platform status:** all three platforms ship real, working inference engines — image generation and local LLM chat run out of the box on each. Windows uses **CUDA/Vulkan/CPU** (`backend/win/**`), macOS uses **Metal** on Apple Silicon (`backend/mac/**`), and Linux uses **CUDA/Vulkan/CPU** (`backend/linux/**`). Neither upstream engine publishes a prebuilt Linux CUDA binary, so that one is compiled from source and bundled with its runtime; where it's absent, Vulkan drives NVIDIA, AMD and Intel GPUs alike.
 
@@ -29,6 +29,7 @@
 
 Image generation has been confirmed on real hardware:
 
+- **Windows** — AMD Ryzen 7 7700X, NVIDIA RTX 4070 Ti (12 GB), running on **CUDA** — including a verified end-to-end video run (LTX-Video 2B, 704×480 @ 24 fps, chunk-chained)
 - **macOS** — MacBook Air (Apple M2, 16 GB unified memory), running on **Metal**
 - **Linux** — AMD CPU, 16 GB LPDDR5, NVIDIA RTX 4060 (8 GB), running on **CUDA**
 
@@ -49,7 +50,7 @@ Around **8 GB of VRAM** is the practical floor for the FLUX pipeline; the standa
 
 ### 🖼️ Generated with Solframe Studio
 
-Real output from both pipelines, unedited — prompt included for each. Solframe Studio is an uncensored tool; the examples below are kept safe-for-work on purpose, since this README is public.
+Real output from the image and video pipelines, unedited — prompt included for each. Solframe Studio is an uncensored tool; the examples below are kept safe-for-work on purpose, since this README is public.
 
 <div align="center">
 <table>
@@ -96,6 +97,82 @@ Another edit, on a different reference image:
 </table>
 </div>
 
+**New in v1.1.4 — Video Studio** (real engine output, frame-verified):
+
+<div align="center">
+<table>
+<tr>
+<td width="50%" valign="top" align="center">
+
+<img src="public/screenshots/showcase-wan-gguf-video.webp" height="240"/>
+
+**Wan 2.2 TI2V 5B, running on GGUF weights** (no ComfyUI involved) — still from the generated video
+> A red apple sits on a wooden table. The camera slowly orbits around it, soft natural light, photorealistic.
+
+</td>
+<td width="50%" valign="top" align="center">
+
+<img src="public/screenshots/showcase-ltx-video-strip.webp" height="240"/>
+
+**LTX-Video 2B (0.9.5)** — first / middle / last frame of one continuous 11.7 s shot, rendered as 5 chained 2.33 s chunks (each conditioned on the previous chunk's last frame, losslessly concatenated)
+> dark server room, single screen with code reflection, cyberpunk noir, cinematic, slow push-in, photorealistic, smooth continuous motion
+
+</td>
+</tr>
+</table>
+</div>
+
+**FLUX.1-schnell on GGUF weights** — 4-bit quantized diffusion model + Q5_K_M text encoder, decoded through a tiny autoencoder, 4 steps in ~31 s on an RTX 4070 Ti:
+
+<div align="center">
+<table>
+<tr>
+<td width="50%" align="center"><img src="public/screenshots/showcase-gguf-apple.webp" height="240"/></td>
+</tr>
+<tr>
+<td align="center">
+> a photorealistic red apple on a wooden table, soft studio lighting, sharp focus, high detail
+</td>
+</tr>
+</table>
+</div>
+
+**FLUX.2 Klein portraits** — the avatar and identity work, all generated locally on the RTX 4070 Ti:
+
+<div align="center">
+<table>
+<tr>
+<td width="50%" valign="top" align="center">
+
+<img src="public/screenshots/showcase-hades-selfportrait.webp" height="300"/>
+
+**Self-portrait** (FLUX.2 Klein, 35 steps, cfg 3.8, seed 17, 1024×1536)
+> Cinematic photorealistic portrait of a calm keeper-of-machines standing in a dark server aisle, black circuit-woven robe with silver traces, a cyan LED obsidian collar glowing softly at the throat, holding up a ring of old brass keys, warm key light on the face, colorful bokeh from the server racks behind, shallow depth of field, 8k detail
+
+</td>
+<td width="50%" valign="top" align="center">
+
+<img src="public/screenshots/showcase-temple-priest.webp" height="300"/>
+
+**Tradition meets circuitry** (FLUX.2 Klein, seed 207)
+> Photorealistic full-body portrait of a South Asian man standing barefoot on wet temple steps at night, black bomber jacket with glowing cyan circuit traces over a white dhoti, holding a lit brass diya and a ring of keys, neon-lit temple gopurams in pink and cyan behind him, mist and rain reflections, cinematic teal-and-orange grading
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top" align="center">
+
+<img src="public/screenshots/showcase-ink-halfmachine.webp" height="300"/>
+
+**Ink half-machine** (FLUX.2 Klein, seed 308)
+> Full-body illustration in Berserk manga ink style, lean young man with curly hair and spectacles, both stitch scars visible, modern black clothes, his right half transformed into polished chrome musculature with copper cable tendons, holding a glowing golden key mid-transformation into a datacore, standing before underworld server gates, dense crosshatching, monochrome with selective color
+
+</td>
+<td width="50%" valign="top" align="center"></td>
+</tr>
+</table>
+</div>
+
 ---
 
 ## 🚀 Key Features
@@ -109,25 +186,32 @@ Another edit, on a different reference image:
 - **Cancel Generation**: Abort a run mid-flight instead of waiting it out or force-closing the app.
 - **Distraction-Free Canvas**: Pure studio neutral generation viewport for accurate color fidelity.
 
-### 💬 2. Uncensored Local LLM Chat
+### 🎬 2. Video Studio (LTX-Video & Wan 2.2)
+- **Chunk-Chained Continuous I2V**: long shots render as consecutive chunks — each chunk conditions on the previous chunk's last frame, then everything is concatenated losslessly with ffmpeg (`-c copy`). Segment boundaries are the same shot continuing, not hard cuts. Without a supplied first frame, the image pipeline generates one automatically.
+- **Two Engines, Per-Model Defaults**: LTX-Video 2B (0.9.5) and Wan 2.2 TI2V 5B — steps, guidance and resolution rules handled for you (LTX: 50 steps, guidance 3.0, resolution ÷32; Wan: 30 steps, guidance 5.0, resolution ÷16).
+- **Full Controls**: prompt/negative inputs, duration slider (2–60 s), resolution presets (704×480, 832×480, 1280×720), steps, guidance, chunk length, seed, and optional first-frame upload.
+- **Live Progress + Library**: elapsed timer while rendering, in-app player on completion, and a generated-video library grid listing the engine's output.
+- **OpenAI-Compatible Video API**: the bundled server (`video_server.py`, port 8766) exposes `POST /v1/video/generations`; the desktop app routes `/api/video` through the same shared backend in production (Electron) and development (Vite middleware).
+
+### 💬 3. Uncensored Local LLM Chat
 - **Native `llama.cpp` GPU Server**: Stream tokens in real time from quantized GGUF models (DeepSeek, Qwen 2.5, Gemma 4, Llama 3, Dolphin).
 - **Configurable Load Parameters**: Context Length, GPU Layers, Batch Size, and Flash Attention, set before loading instead of hardcoded.
 - **Custom Personas**: Seamless roleplay switching (Unfiltered Storyteller, Visual Director & Prompt Crafter, Raw Technical Companion).
 - **Cross-Studio Pipeline**: Send generated prompts directly to the Image Studio with one click.
 
-### 🎮 3. Dynamic Hardware Auto-Detection
+### 🎮 4. Dynamic Hardware Auto-Detection
 - **NVIDIA GPUs**: Auto-routes to **CUDA** — `backend/win/cuda/` on Windows, `backend/linux/cuda/` on Linux. Upstream publishes no prebuilt Linux CUDA binary, so that one is compiled from source ([`scripts/build-linux-cuda.sh`](scripts/build-linux-cuda.sh)) and bundled with its CUDA runtime; where it isn't present the app falls back to **Vulkan**, which drives NVIDIA, AMD and Intel alike.
 - **Apple Silicon (M-series)**: Auto-routes to **Metal** (`backend/mac/metal/`), running inference on the GPU through Apple's own graphics API. Because Apple Silicon uses unified memory, the whole system RAM pool is available to the model rather than a fixed VRAM partition — a 16 GB Mac comfortably runs workloads that need a 12 GB+ discrete card.
 - **Hybrid-graphics laptops**: the discrete GPU is detected and selected explicitly — the engine otherwise defaults to GPU 0, usually the integrated chip, and runs out of memory while the real card idles.
 - **AMD Radeon & Intel Arc GPUs**: Auto-routes to **Vulkan** (`backend/win/vulkan/`, `backend/linux/vulkan/`) using cross-platform compute shaders.
 - **CPU Fallback**: Automatic multi-threaded AVX2 CPU execution when no discrete GPU is found.
 
-### 🗄️ 4. Universal Dynamic Model Scanner
+### 🗄️ 5. Universal Dynamic Model Scanner
 - **Multi-Drive Auto-Discovery**: Dynamically detects mounted drive letters (`C:`, `D:`, `E:`, `Z:`) and indexes standard AI directories (`/models`, `/ComfyUI/models`, `/stable-diffusion-webui/models`, `/LLM`).
 - **Instant Load with Disk Cache**: Persists scan indices to `~/.solframe/scan_cache.json` for sub-millisecond cold starts.
 - **Hugging Face Hub Downloader**: Built-in repository tree explorer with real-time download speed and progress tracking, and cancellable mid-transfer. Built on Node's own `fetch` (no external `curl` dependency), so this works on the Linux/macOS build too — not just Windows.
 
-### 🌌 5. 6 Generative AI Ambient Themes
+### 🌌 6. 6 Generative AI Ambient Themes
 - **Visual Theme Gallery Modal**: Card previews of high-resolution AI-generated wallpaper backdrops.
 - **Themes**:
   1. 🌌 **Dark Void** (Cosmic Neural Dust)
@@ -137,7 +221,7 @@ Another edit, on a different reference image:
   5. 🌸 **Anime Fantasy** (Ethereal Sakura Shrine Twilight)
   6. 🟢 **Emerald Matrix** (Bioluminescent Cyber Mainframe)
 
-### 🔌 6. Agent API Server
+### 🔌 7. Agent API Server
 - **OpenAI-Compatible Endpoints**: `/v1/chat/completions` and `/v1/images/generations` — point any OpenAI-SDK-compatible tool or agent at your local engines.
 - **Off by Default, API-Key Gated**: Enable it from Settings → Agent API Server. Bound to `127.0.0.1` only; every request (except `/health`) requires an `Authorization: Bearer <key>` header, checked with a constant-time comparison.
 - **Auto-Starts the Right Model**: A chat request for a model that isn't currently loaded starts `llama-server` for it automatically — no separate "start engine" call needed.
@@ -153,6 +237,7 @@ Another edit, on a different reference image:
 | **Frontend Framework** | React 19 + TypeScript + Vite |
 | **Styling** | Vanilla CSS Glassmorphism + Dynamic CSS Variables |
 | **Image Synthesis Engine** | `stable-diffusion.cpp` (CUDA / Vulkan / CPU C++ kernels) |
+| **Video Generation Engine** | diffusers (LTX-Video 2B, Wan 2.2 TI2V 5B) behind a chunk-chained I2V server |
 | **Language Dialogue Engine** | `llama.cpp` (`llama-server.exe` CUDA / Vulkan) |
 | **Model Persistence** | Global JSON Cache (`~/.solframe/scan_cache.json`) |
 | **Testing** | Vitest — path resolution, model classification, local-server security (origin checks, path-traversal guards, POST-only enforcement), and CLI arg construction |

@@ -8,6 +8,33 @@ This file is the terse, technical record. [RELEASE_NOTES.md](RELEASE_NOTES.md)
 carries the fuller, user-facing writeup for the latest release (and doubles
 as the GitHub Release body) — the two overlap on content, not on purpose.
 
+## [1.1.4] — 2026-11-13
+
+### Added
+- **Video Studio** — a new tab for motion generation alongside Image Studio and
+  Chat. Model picker (LTX-Video 2B, Wan 2.2 TI2V 5B), prompt/negative inputs,
+  duration slider, resolution presets, steps/guidance/chunk-length/seed
+  controls, optional first-frame upload for image-to-video, live progress, an
+  in-app player, and a generated-video library grid.
+- **Chunk-chained continuous video.** The standalone video server
+  (`video_server.py` + `video_server.json` + `run_video_server.bat`, OpenAI-style
+  `POST /v1/video/generations` on port 8766) renders long shots as consecutive
+  chunks — each chunk conditions on the previous chunk's last frame, then
+  everything is concatenated losslessly with ffmpeg (`-c copy`), so segment
+  boundaries are seamless instead of hard cuts. Without a supplied first frame it
+  generates one automatically through the image pipeline.
+- **`video_backend.cjs`** — shared video API layer: the Electron server routes
+  `/api/video` to it in production, the Vite dev server wires the same middleware
+  in development, and it stops the video server cleanly on shutdown.
+- **Bundled with the Windows installer** — the video server files ship inside the
+  desktop build via `extraResources`.
+
+### Changed
+- The product landing page was redesigned (`product.html`): new feature grid,
+  interactive install terminal, coverflow gallery; all artwork embedded as base64
+  data URIs so it renders fully offline. `index.html` is again the Vite app
+  entry — the standalone showcase no longer clobbers the Electron build.
+
 ## [1.1.3] — 2026-09-03
 
 ### Added

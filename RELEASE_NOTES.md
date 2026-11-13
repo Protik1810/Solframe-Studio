@@ -1,4 +1,4 @@
-# ✨ Solframe Studio v1.1.3
+# ✨ Solframe Studio v1.1.4
 
 **The Sovereign Desktop Generative AI Workstation** — by **Protik**
 
@@ -8,7 +8,25 @@
 
 ---
 
-Solframe Studio is a standalone, self-contained desktop app for 100% private, offline generative AI — image synthesis and LLM chat running as native C++ inference directly on your own GPU, with zero cloud calls, zero subscriptions, and zero telemetry.
+Solframe Studio is a standalone, self-contained desktop app for 100% private, offline generative AI — image synthesis, video generation, and LLM chat running as native inference directly on your own GPU, with zero cloud calls, zero subscriptions, and zero telemetry.
+
+## 🆕 What's new in v1.1.4
+
+**Solframe Studio generates video now.** A new **Video Studio** tab puts text-to-video and image-to-video generation behind the same private, on-your-GPU philosophy as everything else — no cloud, no queue you don't control.
+
+### 🎬 Video Studio
+
+- **Two engines, same tab**: LTX-Video 2B (0.9.5) and Wan 2.2 TI2V 5B, picked per job with per-model defaults handled for you (LTX: 50 steps, guidance 3.0; Wan: 30 steps, guidance 5.0).
+- **Full control**: prompt and negative prompt, duration slider (2–60 s), resolution presets (704×480, 832×480, 1280×720), steps, guidance, chunk length, and seed.
+- **Image-to-video done properly**: attach a first frame — or don't, and the image pipeline generates one for you automatically. Then the engine renders your shot as consecutive chunks, each conditioned on the previous chunk's last frame, and concatenates them losslessly with ffmpeg. The boundary between chunk 1 and chunk 2 is the same shot continuing — no hard cuts, no visible seam. Proven on a real run: an 18.7-second continuous video from 4 chained chunks, with frames taken 0.25 s apart across a chunk boundary indistinguishable from frames inside one chunk.
+- **Live progress and playback**: an elapsed timer while it renders, an in-app player when it's done, and a generated-library grid listing everything the engine has produced.
+- **OpenAI-compatible API**: the video server (`video_server.py`, bundled with the Windows installer) exposes `POST /v1/video/generations` on port 8766 next to the image API's 8765 — point any OpenAI-SDK-style client at it. The desktop app routes its own `/api/video` through the same backend in both production (Electron) and development (Vite middleware), so what you test with `npm run dev` is what ships.
+
+### 🌐 Redesigned product page
+
+The landing page (`product.html`) got a full redesign — new feature grid, an interactive install terminal, and a coverflow gallery — with every screenshot embedded as a base64 data URI, so it renders 100% self-contained even offline. The app entry (`index.html`) is restored to its job, no longer overwritten by the showcase.
+
+---
 
 ## 🆕 What's new in v1.1.3
 
