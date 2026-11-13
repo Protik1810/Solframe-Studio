@@ -1,0 +1,5 @@
+{
+  "apiKey": "sk-solframe-bd1d8a54d49b192a41d80d518f6ee3c63efd9a59b8613f04",
+  "port": 8766,
+  "upstream": "http://127.0.0.1:8765"
+}

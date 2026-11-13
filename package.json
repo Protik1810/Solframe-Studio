@@ -68,6 +68,20 @@
       "public/**/*",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "video_server.py",
+        "to": "video_server.py"
+      },
+      {
+        "from": "video_server.json",
+        "to": "video_server.json"
+      },
+      {
+        "from": "video_backend.cjs",
+        "to": "video_backend.cjs"
+      }
+    ],
     "win": {
       "extraResources": [
         {

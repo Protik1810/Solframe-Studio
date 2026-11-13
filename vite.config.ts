@@ -47,6 +47,14 @@ function sdCppBackendPlugin() {
     name: 'sd-cpp-backend-plugin',
     configureServer(server: any) {
       apiRouter.init();
+      // ─── Video Generation API (Solframe video server on 8766) ──────────────
+      const { handleVideoApi: handleVideoApiFn } = require('./video_backend.cjs');
+      server.middlewares.use((req: any, res: any, next: any) => {
+        if (req.url && req.url.startsWith('/api/video')) {
+          return handleVideoApiFn(req, res, { rootDir, resourcesPath: rootDir });
+        }
+        next();
+      });
       server.middlewares.use(async (req: any, res: any, next: any) => {
         const parsedUrl = new URL(req.url, `http://localhost:${port}`);
         const handled = await apiRouter.handle(req, res, parsedUrl);

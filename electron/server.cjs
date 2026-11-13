@@ -31,6 +31,7 @@ const MIME_TYPES = {
   '.woff': 'font/woff',
   '.ttf': 'font/ttf'
 };
+const { handleVideoApi, stopVideoServer } = require('../video_backend.cjs');
 
 function createServer(options = {}) {
   const rootDir = options.rootDir || process.cwd();
@@ -73,6 +74,11 @@ function createServer(options = {}) {
 
   const server = http.createServer(async (req, res) => {
     const parsedUrl = new URL(req.url, 'http://localhost');
+
+    // ─── Video Generation API (Solframe video server on 8766) ───────────────
+    if (parsedUrl.pathname.startsWith('/api/video')) {
+      return handleVideoApi(req, res, { rootDir, resourcesPath });
+    }
 
     const handled = await apiRouter.handle(req, res, parsedUrl);
     if (handled) return;
@@ -125,6 +131,7 @@ function createServer(options = {}) {
     listen: (listenPort, callback) => server.listen(listenPort || port, '127.0.0.1', callback),
     close: cb => {
       apiRouter.dispose();
+      stopVideoServer();
       server.close(cb);
     }
   };
