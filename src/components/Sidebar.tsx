@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { Image, MessageSquare, Images, Database, Settings, Palette, Info, Clapperboard } from "lucide-react";
-import { ComfyStatus } from "../services/comfyApi";
-import { LLMStatus } from "../services/llmApi";
 import { ThemeModal, AppThemeId, APP_THEMES } from "./ThemeModal";
 
 export type TabType = "image" | "video" | "chat" | "gallery" | "models" | "about" | "settings";
