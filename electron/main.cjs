@@ -179,6 +179,34 @@ function installPermissionHandlers() {
   session.defaultSession.setPermissionCheckHandler(() => false);
 }
 
+// ── OTA updates (electron-updater, GitHub releases) ─────────────────────────
+// Packaged builds only. Checks GitHub releases silently at startup and every
+// 6h, downloads in the background, and applies on the next app restart
+// (autoInstallOnAppQuit). The existing /api/check-update About-page notice
+// keeps its manual-download flow; this layer is the unattended path.
+function setupAutoUpdater() {
+  if (!app.isPackaged) return;
+  let autoUpdater;
+  try {
+    ({ autoUpdater } = require("electron-updater"));
+  } catch (e) {
+    console.log(`[Solframe OTA] updater unavailable, skipping: ${e.message}`);
+    return;
+  }
+  autoUpdater.logger = console;
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.on("update-downloaded", (info) => {
+    console.log(`[Solframe OTA] v${info.version} downloaded — applies on next restart`);
+  });
+  autoUpdater.on("error", (e) => {
+    console.log(`[Solframe OTA] check failed: ${(e && e.message) || e}`);
+  });
+  const check = () => autoUpdater.checkForUpdates().catch(() => {});
+  setTimeout(check, 15000); // after the engine boots
+  setInterval(check, 6 * 60 * 60 * 1000);
+}
+
 app.whenReady().then(() => {
   installPermissionHandlers();
   createSplashWindow();
@@ -190,6 +218,7 @@ app.whenReady().then(() => {
   appServer.listen(PORT, () => {
     console.log(`[Solframe Desktop] Engine listening on http://127.0.0.1:${PORT}`);
     createMainWindow();
+    setupAutoUpdater();
   });
 });
 

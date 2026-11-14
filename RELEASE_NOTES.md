@@ -1,4 +1,24 @@
-# ✨ Solframe Studio v1.1.4
+# ✨ Solframe Studio v1.1.5
+
+**The Sovereign Desktop Generative AI Workstation** — by **Protik**
+
+## 🆕 What's new in v1.1.5
+
+### 🎥 Third video engine: MiniMax H3 (FreeVideo)
+
+Video Studio gains a third model — **MiniMax H3**, running through the installed FreeVideo headless engine (Video DeltaNet / VDN-H3, int8) right on your GPU. It appears in the model picker as "MiniMax H3" with its own engine-managed defaults; guidance and chunking are handled by the engine, single runs up to 15 s. The duration slider now adapts to the selected model instead of a fixed 60 s, and clamps instantly when you switch models.
+
+### 🔄 Automatic updates (OTA)
+
+The Windows app now keeps itself current: it checks GitHub Releases at startup and every 6 hours, downloads a new version silently in the background, and applies it the next time you restart the app. No installer hunting, no manual re-download — the About page still shows what version you're on and what's latest. (The portable exe is single-file by design and still updates the manual way.)
+
+### 🔧 Installer fix
+
+v1.1.4's installed build could fail on launch with `Cannot find module '../video_backend.cjs'` — the Video Studio backend module shipped outside the app archive the code required it from. Fixed for good: the module is packed into the asar and the loader falls back to the resources copy, so both install layouts work.
+
+---
+
+# ✨ Solframe Studio v1.1.4 (previous)
 
 **The Sovereign Desktop Generative AI Workstation** — by **Protik**
 

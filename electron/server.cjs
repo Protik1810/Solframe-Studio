@@ -31,7 +31,17 @@ const MIME_TYPES = {
   '.woff': 'font/woff',
   '.ttf': 'font/ttf'
 };
-const { handleVideoApi, stopVideoServer } = require('../video_backend.cjs');
+const { handleVideoApi, stopVideoServer } = (() => {
+  // In dev, ../video_backend.cjs is the repo root. In a packaged build the
+  // relative path resolves inside the asar; the real file ships as an
+  // extraResource next to app.asar. Try both, dev layout first.
+  const candidates = [
+    path.join(__dirname, '..', 'video_backend.cjs'),
+    path.join(process.resourcesPath || '', 'video_backend.cjs'),
+  ];
+  const modPath = candidates.find(p => { try { return fs.existsSync(p); } catch { return false; } });
+  return require(modPath || candidates[0]);
+})();
 
 function createServer(options = {}) {
   const rootDir = options.rootDir || process.cwd();
