@@ -94,6 +94,7 @@ export const VideoStudio: React.FC<VideoStudioProps> = ({
   };
 
   const activeModel = models.find(m => m.id === modelId);
+  const maxSeconds = activeModel?.video?.max_seconds || 60;
 
   const applyModelDefaults = (id: string) => {
     setModelId(id);
@@ -104,6 +105,7 @@ export const VideoStudio: React.FC<VideoStudioProps> = ({
     }
     if (m?.video?.default_steps) setSteps(m.video.default_steps);
     if (m?.video?.default_guidance) setGuidance(m.video.default_guidance);
+    setSeconds(s => Math.min(s, m?.video?.max_seconds || 60));
   };
 
   const handleFirstFrameUpload = (file: File | null) => {
@@ -233,7 +235,7 @@ export const VideoStudio: React.FC<VideoStudioProps> = ({
                 title={m.video?.pipeline || m.id}
               >
                 <Sparkles size={13} style={{ marginRight: 6, verticalAlign: -2 }} />
-                {m.id.replace('ltx-video-2b-0.9.5', 'LTX-Video 2B').replace('wan2.2-ti2v-5b', 'Wan 2.2 TI2V 5B')}
+                {m.id.replace('ltx-video-2b-0.9.5', 'LTX-Video 2B').replace('wan2.2-ti2v-5b', 'Wan 2.2 TI2V 5B').replace('minimax-h3-freevideo', 'MiniMax H3')}
               </button>
             ))}
             {!models.length && (
@@ -271,15 +273,18 @@ export const VideoStudio: React.FC<VideoStudioProps> = ({
         </div>
 
         <div className="control-group">
-          <div className="control-label">Duration: {seconds}s · {fps}fps · {Math.max(1, Math.ceil(seconds / Math.max(1, chunkSeconds)))} segment(s)</div>
+          <div className="control-label">
+            Duration: {seconds}s · {fps}fps
+            {activeModel?.video?.max_seconds ? '' : ` · ${Math.max(1, Math.ceil(seconds / Math.max(1, chunkSeconds)))} segment(s)`}
+          </div>
           <input
             className="slider-input"
             type="range"
             min={2}
-            max={60}
+            max={maxSeconds}
             step={1}
             value={seconds}
-            onChange={(e) => setSeconds(Number(e.target.value))}
+            onChange={(e) => setSeconds(Math.min(Number(e.target.value), maxSeconds))}
           />
         </div>
 

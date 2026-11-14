@@ -26,8 +26,10 @@ POST /v1/video/generations body:
   fps             (int, default 24)
   resolution      (str "WxH", default per model; must be divisible by the
                    model's spatial multiple — 32 for LTX, 16 for Wan)
-  model           (str, optional: "ltx-video-2b-0.9.5" (default) or
-                   "wan2.2-ti2v-5b"; aliases "ltx"/"wan" accepted)
+  model           (str, optional: "ltx-video-2b-0.9.5" (default),
+                   "wan2.2-ti2v-5b", or "minimax-h3-freevideo" (FreeVideo
+                   engine, engine-managed resolution/guidance, <=15s);
+                   aliases "ltx"/"wan"/"h3" accepted)
   seed            (int, optional)
   steps           (int, default per model: LTX 50, Wan 30)
   guidance_scale  (float, default per model: LTX 3.0, Wan 5.0)
@@ -57,6 +59,9 @@ REPO_ROOT = Path(r"D:\genimg_comic")
 CONFIG_PATH = Path(r"D:\genimg_comic\video_server.json")
 MODEL_DIR = Path(r"D:\models\LTX-Video-0.9.5")
 WAN_MODEL_DIR = Path(r"D:\models\Wan2.2-TI2V-5B-Diffusers")
+FREEVIDEO_ROOT = Path(r"D:\ComfyUI\ComfyUI_windows_portable\ComfyUI\custom_nodes\FreeVideo")
+H3_MODEL_ID = "minimax-h3-freevideo"
+H3_MAX_SECONDS = 15.0   # single FreeVideo run; longer jobs are a v1.2 item
 OUT_DIR = REPO_ROOT / "outputs" / "videos"
 LOG_PATH = REPO_ROOT / "video_server.log"
 UPSTREAM = "http://127.0.0.1:8765"  # packaged Solframe agent server (untouched)
@@ -137,12 +142,16 @@ DEFAULT_MODEL = "ltx-video-2b-0.9.5"
 
 
 def resolve_model_id(v):
-    """Accept 'ltx'/'wan' aliases and the full ids; unknown -> default."""
+    """Accept 'ltx'/'wan'/'h3' aliases and the full ids; unknown -> default."""
     if not v:
         return DEFAULT_MODEL
     v = str(v).strip().lower().replace(" ", "")
     if v in MODEL_REGISTRY:
         return v
+    if v == H3_MODEL_ID:
+        return H3_MODEL_ID
+    if v.startswith("h3") or v.startswith("freevideo") or v.startswith("minimax"):
+        return H3_MODEL_ID
     if v.startswith("ltx"):
         return "ltx-video-2b-0.9.5"
     if v.startswith("wan"):
@@ -303,10 +312,12 @@ def run_generation(job):
     import torch
     t0 = time.time()
     prompt = job["prompt"]
+    model_id = resolve_model_id(job.get("model"))
+    if model_id == H3_MODEL_ID:
+        return run_generation_h3(job)
     negative = job.get("negative_prompt", "") or ""
     seconds = max(1.0, min(60.0, float(job.get("seconds", 16))))
     fps = int(job.get("fps", 24) or 24)
-    model_id = resolve_model_id(job.get("model"))
     spec = MODEL_REGISTRY[model_id]
     mult = spec["mult"]
     res = (job.get("resolution") or "").lower().replace("×", "x")
@@ -409,6 +420,130 @@ def run_generation(job):
         "probe": probe,
     }
 
+# ------------------------------------------------ FreeVideo (MiniMax H3) ----
+def h3_machine():
+    """FreeVideo engine readiness (machine.json written by its setup)."""
+    try:
+        m = json.loads((FREEVIDEO_ROOT / "machine.json").read_text(encoding="utf-8"))
+        if m.get("ready") and m.get("cache"):
+            return m
+    except Exception:
+        pass
+    return None
+
+
+def run_generation_h3(job):
+    """MiniMax H3 through the installed FreeVideo engine (headless CLI).
+
+    Diffusers never sees this model: the CLI manages its own int8 weights,
+    attention-kernel selection and RAM/VRAM budgeting (needs >= 4 GB commit
+    headroom, so the resident diffusers pipe is unloaded first). Resolution,
+    guidance and chunking are engine-managed; seconds is capped at one
+    FreeVideo run (H3_MAX_SECONDS)."""
+    t0 = time.time()
+    prompt = (job["prompt"] or "").strip()
+    seconds = max(1.0, min(H3_MAX_SECONDS, float(job.get("seconds", 8))))
+    seed = job.get("seed")
+    seed = int(seed) if seed is not None else None
+    steps = job.get("steps")
+
+    machine = h3_machine()
+    if not machine:
+        raise RuntimeError(
+            "FreeVideo engine not ready (machine.json missing/not ready) — "
+            "run FreeVideo setup on this machine first")
+    cache = machine["cache"]
+
+    # The H3 engine needs the commit headroom the resident diffusers pipe holds.
+    unload_pipe()
+
+    bearer = job["_bearer"]
+    first = resolve_first_frame(job.get("first_frame"), bearer)
+    stamp = time.strftime("%Y%m%d_%H%M%S")
+    job_id = f"vid_{stamp}_h3"
+
+    tmp_dir = OUT_DIR / "h3_tmp"
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+
+    # Prompt mapping: a plain studio prompt becomes a minimal i2va/t2va H3
+    # prompt; a prompt that already carries H3 sections passes verbatim.
+    structured = any(line.strip().startswith(("integrated_multimodal_description:",
+                                              "subject_definitions:", "summary:",
+                                              "detailed_description:"))
+                     for line in prompt.splitlines())
+    if structured:
+        body = prompt
+    else:
+        desc = prompt
+        if not desc.startswith("[Shot"):
+            desc = "[Shot 1] Live-action, cinematic. " + desc
+        if "subtitles" not in desc.lower() and "on-screen text" not in desc.lower():
+            desc += " No subtitles, no on-screen text."
+        body = ("integrated_multimodal_description: " + desc + "\n\n"
+                "overall_soundscape: Ambient room tone and natural action sounds "
+                "matching the scene.\n\n"
+                "non_diegetic_music: N/A\n")
+    prompt_path = tmp_dir / f"{job_id}_prompt.txt"
+    prompt_path.write_text(body, encoding="utf-8")
+
+    cmd = ["cmd", "/c", str(FREEVIDEO_ROOT / "freevideo.cmd"), "generate",
+           "--cache", str(cache), "--prompt-file", str(prompt_path)]
+    if first is not None:
+        ff_path = tmp_dir / f"{job_id}_first.png"
+        first.save(ff_path)
+        media_path = tmp_dir / f"{job_id}_media.json"
+        media_path.write_text(json.dumps({"version": 1, "first": str(ff_path)}),
+                              encoding="utf-8")
+        cmd += ["--media", str(media_path)]
+    if seed is not None:
+        cmd += ["--seed", str(seed)]
+    # steps >= 9 maps to a single pass of that many steps (FreeVideo "high/max"
+    # territory); the default of 8 keeps the two-pass light path.
+    if steps:
+        bs = max(8, min(20, int(steps)))
+        if bs > 8:
+            cmd += ["--base-steps", str(bs)]
+    out_path = OUT_DIR / f"{job_id}.mp4"
+    cmd += ["--out", str(out_path)]
+
+    log(f"H3 job {job_id}: {seconds}s seed={seed} steps={steps} "
+        f"first_frame={'yes' if first is not None else 'auto'}")
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=3600)
+        if proc.returncode != 0 or not out_path.exists():
+            tail = (proc.stdout or "")[-1500:] + (proc.stderr or "")[-1500:]
+            raise RuntimeError(f"FreeVideo generate failed rc={proc.returncode}: {tail}")
+    finally:
+        for p in tmp_dir.glob(f"{job_id}_*"):
+            p.unlink(missing_ok=True)
+
+    probe = probe_video(out_path)
+    width = height = None
+    duration = None
+    if probe:
+        st = (probe.get("streams") or [{}])[0]
+        width, height = st.get("width"), st.get("height")
+        try:
+            duration = float((probe.get("format") or {}).get("duration") or 0) or None
+        except (TypeError, ValueError):
+            duration = None
+    log(f"H3 job {job_id} complete: {out_path.name} total {time.time()-t0:.0f}s")
+    return {
+        "url": f"/v1/files/{out_path.name}",
+        "filename": out_path.name,
+        "model": H3_MODEL_ID,
+        "segments": 1,
+        "chunk_seconds": seconds,
+        "segment_frames": 0,
+        "fps": 24,
+        "width": width or 1344,
+        "height": height or 768,
+        "duration_s": round(duration or seconds, 2),
+        "engine_seconds": round(time.time() - t0, 1),
+        "probe": probe,
+    }
+
+
 # ------------------------------------------------------------- http layer ---
 def check_auth(handler):
     if not API_KEYS:
@@ -486,6 +621,24 @@ VIDEO_MODELS = [{
         "default_steps": 30,
         "default_guidance": 5.0,
         "chunking": "each segment conditioned on the last frame of the previous segment",
+    },
+}, {
+    "id": H3_MODEL_ID,
+    "object": "model",
+    "owned_by": "solframe-video",
+    "video": {
+        "pipeline": "FreeVideo headless engine (Video DeltaNet / VDN-H3 edge, int8)",
+        "repo": "OpenVDN/vdn-minimax-h3-edge",
+        "license": "MiniMax H3 Community License (territorial/acceptable-use restrictions apply)",
+        "native_clip_s": 15.0,
+        "fps": [24],
+        "max_seconds": int(H3_MAX_SECONDS),
+        "native_resolution": "1344x768 (engine-managed)",
+        "recommended_resolution": "engine-managed",
+        "default_steps": 8,
+        "audio": "native generated audio (VA task)",
+        "chunking": "engine-managed; single run per job in v1.1.5 (max 15s)",
+        "notes": "resolution/guidance ignored; steps>8 run one-pass; engine RAM-admitted per job",
     },
 }]
 

@@ -4,7 +4,7 @@
   "private": true,
   "_comment_desktopName": "Read by electron-builder from the package.json root (metadata.desktopName), NOT from the build config \u2014 it is rejected by the schema under build.linux. Electron derives the Linux app_id / WM_CLASS from it, and the installed .desktop filename is matched to it via build.linux.syncDesktopName. Without it the running window can't be linked to its .desktop entry, so the desktop environment shows no app icon.",
   "desktopName": "solframe-studio.desktop",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "Standalone AI Image Generation and Chat Studio with FLUX, SDXL, llama.cpp",
   "author": "Protik",
   "license": "GPL-3.0-or-later",

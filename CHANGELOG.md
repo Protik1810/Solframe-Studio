@@ -8,9 +8,34 @@ This file is the terse, technical record. [RELEASE_NOTES.md](RELEASE_NOTES.md)
 carries the fuller, user-facing writeup for the latest release (and doubles
 as the GitHub Release body) — the two overlap on content, not on purpose.
 
+## [1.1.5] — 2026-11-14
+
+### Added
+
+- **MiniMax H3 (FreeVideo) video model.** A third video model,
+  `minimax-h3-freevideo`, now runs through the installed FreeVideo headless
+  engine (Video DeltaNet / VDN-H3 edge, int8). The video server accepts
+  `h3`/`freevideo`/`minimax` aliases, reports engine readiness via the
+  FreeVideo `machine.json`, and returns a full model card (`pipeline`,
+  `max_seconds`, engine-managed guidance/chunking notes) on
+  `GET /v1/video/models`. Guidance and chunking are engine-managed; a single
+  run is capped at 15s in this release (chained H3 shots are a v1.2 item).
+- **Acceptance test for the H3 path.** `scripts/test_video_server_h3.py`
+  (`run_h3_test.bat` wrapper): `--models` asserts the H3 card is listed with
+  `max_seconds`; `--render` runs a real 4s H3 job end-to-end through the server
+  and verifies the returned file is a valid, non-trivial mp4.
+
+### Changed
+
+- **Video Studio UI** (`VideoStudio.tsx`): H3 shows as "MiniMax H3" in the model
+  picker; the duration slider is capped by the active model's `max_seconds`
+  instead of a fixed 60s and clamps immediately on model switch; the chunked-
+  segment count is only shown for chunk-chained models (LTX/Wan), not H3.
+
 ## [1.1.4] — 2026-11-13
 
 ### Added
+
 - **Video Studio** — a new tab for motion generation alongside Image Studio and
   Chat. Model picker (LTX-Video 2B, Wan 2.2 TI2V 5B), prompt/negative inputs,
   duration slider, resolution presets, steps/guidance/chunk-length/seed
@@ -30,6 +55,7 @@ as the GitHub Release body) — the two overlap on content, not on purpose.
   desktop build via `extraResources`.
 
 ### Changed
+
 - The product landing page was redesigned (`product.html`): new feature grid,
   interactive install terminal, coverflow gallery; all artwork embedded as base64
   data URIs so it renders fully offline. `index.html` is again the Vite app
@@ -38,6 +64,7 @@ as the GitHub Release body) — the two overlap on content, not on purpose.
 ## [1.1.3] — 2026-09-03
 
 ### Added
+
 - **Linux is a real platform.** `backend/linux/**` now ships working
   inference engines instead of nothing: Vulkan and CPU builds of
   `stable-diffusion.cpp` plus `llama.cpp`, fetched and checksum-verified by
@@ -54,6 +81,7 @@ as the GitHub Release body) — the two overlap on content, not on purpose.
   now detected via `--list-devices` and pinned explicitly.
 
 ### Changed
+
 - **One download per platform**: the Windows installer, the Linux `.deb`,
   and the macOS Apple Silicon `.zip`. The Windows Lightweight installer,
   the macOS `.dmg`, and the Intel Mac build are no longer published.
@@ -64,6 +92,7 @@ as the GitHub Release body) — the two overlap on content, not on purpose.
   an x86_64 bundle shipped a UI that could not generate.
 
 ### Fixed
+
 - `LD_LIBRARY_PATH` is set when spawning engines on Linux. The CUDA engine
   links its runtime dynamically, so without this the bundled libraries were
   invisible on exactly the machines the bundling was meant to serve.
@@ -86,6 +115,7 @@ as the GitHub Release body) — the two overlap on content, not on purpose.
 ## [1.1.2] — 2026-09-02
 
 ### Added
+
 - Content-Security-Policy and `X-Content-Type-Options` headers on every
   response, applied identically in dev and production.
 - Electron permission handler denying camera/mic/geolocation/notification
@@ -103,6 +133,7 @@ as the GitHub Release body) — the two overlap on content, not on purpose.
 - Real generated/edited image examples with prompts in the README.
 
 ### Changed
+
 - `electron-builder` bumped to a version released after Electron 36 existed.
 - `ImageStudio.tsx` (31 `useState` calls) and `ChatStudio.tsx` (~14) each
   collapsed into a single `useReducer`.
@@ -113,6 +144,7 @@ as the GitHub Release body) — the two overlap on content, not on purpose.
   there's no auto-updater yet).
 
 ### Fixed
+
 - Image Studio's GPU badge in Studio Controls showed a literal hardcoded
   "RTX 4070 Ti (12GB)" string, unconnected to actual hardware detection —
   now shows the real detected GPU, matching the canvas header's badge.
@@ -127,6 +159,7 @@ as the GitHub Release body) — the two overlap on content, not on purpose.
 ## [1.1.1] — 2026-09-01
 
 ### Added
+
 - FLUX Kontext-style reference-image editing (`-r/--ref-image`) in Image
   Studio — attach an image, describe the change.
 - Chat: image attachments for vision-capable models via `llama-server`'s
@@ -136,6 +169,7 @@ as the GitHub Release body) — the two overlap on content, not on purpose.
 - Negative prompt support for the FLUX pipeline (previously standard-only).
 
 ### Fixed
+
 - Flash attention now runs by default on every FLUX generation
   (`--diffusion-fa`) — fixes large Klein models silently overflowing VRAM
   and falling back to ~30-40x-slower CUDA driver paging with no visible
@@ -154,6 +188,7 @@ as the GitHub Release body) — the two overlap on content, not on purpose.
   inaccurate claim that Linux ships native Vulkan/AVX2 kernels.
 
 ### Changed
+
 - Replaced CPU text-encoder offload with `--offload-to-cpu` (keeps FLUX
   weights in system RAM, computes entirely on GPU) — auto-enables above
   ~512x512 resolution, still manually overridable.
@@ -165,6 +200,7 @@ as the GitHub Release body) — the two overlap on content, not on purpose.
 ## [1.1.0] — 2026-08-31
 
 ### Added
+
 - Real macOS support (Apple Silicon + Intel): native Metal-accelerated
   `stable-diffusion.cpp`/`llama.cpp`, universal binaries, correct hardware
   detection, `/Volumes/*` model scanning.
@@ -174,6 +210,7 @@ as the GitHub Release body) — the two overlap on content, not on purpose.
   generation-progress ring and "ready to view" badge.
 
 ### Fixed
+
 - Three curated Model Hub presets pointing at renamed/moved files (404s);
   removed three off-topic/incompatible presets.
 - Downloads now save to the portable `AppData/Solframe Studio` location
@@ -193,6 +230,7 @@ as the GitHub Release body) — the two overlap on content, not on purpose.
 Initial public release.
 
 ### Added
+
 - FLUX.2-Klein and SDXL Lightning image generation via native
   `stable-diffusion.cpp` (CUDA/Vulkan/Metal/CPU, auto-detected).
 - LoRA support with a live strength slider.
