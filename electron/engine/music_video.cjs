@@ -378,13 +378,13 @@ async function runPipeline(job, spec, cfg, ctx) {
         break;
       } catch (e) {
         lastClipErr = e;
-        if (canceled()) throw new Error('cancelled');
+        if (canceled()) throw new Error('cancelled', { cause: e });
         if (attempt < 3) {
           job.log = (job.log || []).concat([`clip ${i + 1} attempt ${attempt}: ${e.message} — restarting engine`]);
           try { stopVideoServer(); } catch (e2) {}
           await new Promise((r2) => setTimeout(r2, 5000));
           const st2 = await ensureVideoServer(ctx.rootDir, ctx.resourcesPath);
-          if (!st2.running) throw new Error('video server offline after restart: ' + (st2.error || 'unavailable'));
+          if (!st2.running) throw new Error('video server offline after restart: ' + (st2.error || 'unavailable'), { cause: e });
         }
       }
     }
@@ -463,9 +463,9 @@ async function handleMusicVideoApi(req, res, ctx = {}) {
   const sendJson = (code, obj) => { res.statusCode = code; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(obj)); };
 
   if (pathname === '/config' && req.method === 'GET') {
-    let ace = false, video = false;
+    let ace = false;
     try { const h = await httpJson(`${cfg.aceUrl}/health`, 'GET', null, {}, 4000); ace = h.status === 200; } catch (e) {}
-    video = await probePort(cfg.videoPort);
+    const video = await probePort(cfg.videoPort);
     return sendJson(200, {
       ace: { url: cfg.aceUrl, configured: ace },
       video: { ok: video },
