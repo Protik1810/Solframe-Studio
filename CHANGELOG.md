@@ -8,7 +8,7 @@ This file is the terse, technical record. [RELEASE_NOTES.md](RELEASE_NOTES.md)
 carries the fuller, user-facing writeup for the latest release (and doubles
 as the GitHub Release body) — the two overlap on content, not on purpose.
 
-## [1.2.0] — 2026-11-16
+## [1.2.0] — 2026-11-15
 
 ### Added
 
