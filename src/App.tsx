@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { ImageStudio } from './components/ImageStudio';
 import { VideoStudio } from './components/VideoStudio';
+import { MusicVideoStudio } from './components/MusicVideoStudio';
 import { ChatStudio } from './components/ChatStudio';
 import { ModelManager } from './components/ModelManager';
 import { GalleryStudio, GalleryItem } from './components/GalleryStudio';
@@ -12,7 +13,7 @@ import { llmService, LLMStatus } from './services/llmApi';
 import './index.css';
 
 export function App() {
-  const [activeTab, setActiveTab] = useState<'image' | 'video' | 'chat' | 'gallery' | 'models' | 'about' | 'settings'>('image');
+  const [activeTab, setActiveTab] = useState<'image' | 'video' | 'musicvideo' | 'chat' | 'gallery' | 'models' | 'about' | 'settings'>('image');
 
   // Backend Status
   const [llmStatus, setLlmStatus] = useState<LLMStatus>({ connected: false, type: 'embedded-llama', models: [] });
@@ -235,6 +236,15 @@ export function App() {
 
         {activeTab === 'video' && (
           <VideoStudio
+            onError={triggerError}
+            onSuccess={triggerSuccess}
+            onGenerateStart={handleGenerateStart}
+            onGenerateEnd={handleGenerateEnd}
+          />
+        )}
+
+        {activeTab === 'musicvideo' && (
+          <MusicVideoStudio
             onError={triggerError}
             onSuccess={triggerSuccess}
             onGenerateStart={handleGenerateStart}

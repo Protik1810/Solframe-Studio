@@ -8,6 +8,36 @@ This file is the terse, technical record. [RELEASE_NOTES.md](RELEASE_NOTES.md)
 carries the fuller, user-facing writeup for the latest release (and doubles
 as the GitHub Release body) — the two overlap on content, not on purpose.
 
+## [1.2.0] — 2026-11-16
+
+### Added
+
+- **Music generation (ACE-Step).** New Music Video Mode backend
+  (`electron/engine/music_video.cjs`) orchestrates song creation through the
+  local ACE-Step v1.5 turbo API (MIT-licensed weights): 2B diffusion
+  transformer + 1.7B lyric LM, prompt-to-song with vocals, up to 4+ minutes,
+  fully local — no external model APIs.
+- **Music Video Mode UI.** New `musicvideo` tab (`MusicVideoStudio.tsx`,
+  `musicVideoApi.ts`, sidebar Music button): submit a song spec, watch the
+  pipeline (song → keyframes → scenes → assembly), cancel mid-flight.
+- **Per-platform packaging targets.** electron-builder now targets Windows
+  NSIS, Linux `.deb` + `.AppImage`, macOS `.dmg` (arm64); the stale
+  `electron:portable` script is gone.
+
+### Fixed
+
+- `music_video.cjs` resolves `video_backend.cjs` via the same
+  dev-asar/extraResource candidate chain as `server.cjs` (e500dde), so
+  Music Video Mode works in packaged builds, not just dev.
+
+### Website
+
+- Showcase page gains three feature cards (AI Video Generation, AI Music
+  Studio, One-Click AI Music Videos), a background music player ("Night
+  Compile", ACE-Step-generated, with an on-screen mute toggle), and a
+  6-second ambient brand loop (1366×768, first frame == last frame) rendered
+  by the MiniMax H3 engine from one of the site's own theme emblems.
+
 ## [1.1.5] — 2026-11-14
 
 ### Added

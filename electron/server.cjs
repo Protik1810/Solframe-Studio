@@ -42,6 +42,7 @@ const { handleVideoApi, stopVideoServer } = (() => {
   const modPath = candidates.find(p => { try { return fs.existsSync(p); } catch { return false; } });
   return require(modPath || candidates[0]);
 })();
+const { handleMusicVideoApi } = require('./engine/music_video.cjs');
 
 function createServer(options = {}) {
   const rootDir = options.rootDir || process.cwd();
@@ -88,6 +89,14 @@ function createServer(options = {}) {
     // ─── Video Generation API (Solframe video server on 8766) ───────────────
     if (parsedUrl.pathname.startsWith('/api/video')) {
       return handleVideoApi(req, res, { rootDir, resourcesPath });
+    }
+
+    // ─── Music Video Mode (orchestrates ACE-Step + keyframes + video + ffmpeg) ──
+    if (parsedUrl.pathname.startsWith('/api/musicvideo')) {
+      return handleMusicVideoApi(req, res, {
+        rootDir, resourcesPath, userOutputsDir,
+        engineCore: apiRouter.engineCore,
+      });
     }
 
     const handled = await apiRouter.handle(req, res, parsedUrl);

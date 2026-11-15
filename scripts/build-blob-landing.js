@@ -31,6 +31,10 @@ const copyAsset = (relPath, destSubpath) => {
 
 const logoUrl = copyAsset('public/logo.png', 'logo.png');
 const faviconUrl = copyAsset('public/favicon.png', 'favicon.png');
+// v1.2.0 media: "Night Compile" background track + the 6s ambient brand loop,
+// both generated locally by Solframe's own music and video engines.
+const audioUrl = copyAsset('public/audio/night_compile.mp3', 'audio/night_compile.mp3');
+const videoLoopUrl = copyAsset('public/video/solframe-brand-loop.mp4', 'video/solframe-brand-loop.mp4');
 // The footer links to these by relative path — without copying them here,
 // they 404 on the live site since docs/ never had them.
 copyAsset('LICENSE', 'LICENSE');
@@ -46,8 +50,14 @@ const screenshots = {
   SCREENSHOT_1: copyAsset('public/screenshots/showcase-lion-artwork.webp', 'screenshots/showcase-lion-artwork.webp'),
   SCREENSHOT_2: copyAsset('public/screenshots/studio-image-canvas.webp', 'screenshots/studio-image-canvas.webp'),
   SCREENSHOT_3: copyAsset('public/screenshots/llm-chat-studio.webp', 'screenshots/llm-chat-studio.webp'),
-  SCREENSHOT_4: copyAsset('public/screenshots/sampling-progress-step16.webp', 'screenshots/sampling-progress-step16.webp'),
-  SCREENSHOT_5: copyAsset('public/screenshots/sampling-progress-step44.webp', 'screenshots/sampling-progress-step44.webp')
+  SCREENSHOT_4: copyAsset(
+    'public/screenshots/sampling-progress-step16.webp',
+    'screenshots/sampling-progress-step16.webp'
+  ),
+  SCREENSHOT_5: copyAsset(
+    'public/screenshots/sampling-progress-step44.webp',
+    'screenshots/sampling-progress-step44.webp'
+  )
 };
 
 // Per-theme art (hero backdrop, showcase backdrop, brand emblem) — each of
@@ -121,6 +131,8 @@ const replacements = {
   SITE_BASE_URL,
   FAVICON_URL: faviconUrl,
   OG_IMAGE_URL: `${SITE_BASE_URL}${logoUrl}`,
+  AUDIO_NIGHT_COMPILE: audioUrl,
+  VIDEO_BRAND_LOOP: videoLoopUrl,
   // electron-builder's productName ("Solframe Studio") has a space, and
   // GitHub replaces spaces with dots when it sanitizes uploaded release
   // asset filenames (confirmed against the real uploaded assets: "Solframe
@@ -155,5 +167,9 @@ if (remaining) {
 if (!fs.existsSync(docsDir)) fs.mkdirSync(docsDir, { recursive: true });
 fs.writeFileSync(path.join(docsDir, 'index.html'), html, 'utf8');
 
-console.log('✅ Generated docs/index.html + copied assets (themes/, screenshots/, logo.png, favicon.png, LICENSE, TERMS.md)!');
-console.log('   This is a gitignored build output — push to main and the Pages workflow regenerates + deploys it automatically.');
+console.log(
+  '✅ Generated docs/index.html + copied assets (themes/, screenshots/, logo.png, favicon.png, LICENSE, TERMS.md)!'
+);
+console.log(
+  '   This is a gitignored build output — push to main and the Pages workflow regenerates + deploys it automatically.'
+);

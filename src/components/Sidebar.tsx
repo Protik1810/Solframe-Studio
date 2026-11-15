@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { Image, MessageSquare, Images, Database, Settings, Palette, Info, Clapperboard } from "lucide-react";
+import { Image, MessageSquare, Images, Database, Settings, Palette, Info, Clapperboard, Music } from "lucide-react";
 import { ThemeModal, AppThemeId, APP_THEMES } from "./ThemeModal";
 
-export type TabType = "image" | "video" | "chat" | "gallery" | "models" | "about" | "settings";
+export type TabType = "image" | "video" | "musicvideo" | "chat" | "gallery" | "models" | "about" | "settings";
 
 interface SidebarProps {
   activeTab: TabType;
@@ -187,6 +187,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
             title="Video Studio (LTX-Video & Wan 2.2 — chunked continuous I2V)"
           >
             <Clapperboard size={22} />
+          </button>
+
+          <button
+            className={`sidebar-icon ${activeTab === "musicvideo" ? "active" : ""}`}
+            onClick={() => setActiveTab("musicvideo")}
+            title="Music Video Mode (song in, AI music video out — ACE-Step + keyframes + clips)"
+          >
+            <Music size={22} />
           </button>
 
           <button

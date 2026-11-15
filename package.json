@@ -4,8 +4,8 @@
   "private": true,
   "_comment_desktopName": "Read by electron-builder from the package.json root (metadata.desktopName), NOT from the build config \u2014 it is rejected by the schema under build.linux. Electron derives the Linux app_id / WM_CLASS from it, and the installed .desktop filename is matched to it via build.linux.syncDesktopName. Without it the running window can't be linked to its .desktop entry, so the desktop environment shows no app icon.",
   "desktopName": "solframe-studio.desktop",
-  "version": "1.1.5",
-  "description": "Standalone AI Image Generation and Chat Studio with FLUX, SDXL, llama.cpp",
+  "version": "1.2.0",
+  "description": "Standalone AI Creation Studio: images (FLUX/SDXL), chat (llama.cpp), video (LTX), music (ACE-Step), and one-click AI music videos",
   "author": "Protik",
   "license": "GPL-3.0-or-later",
   "main": "electron/main.cjs",
@@ -25,7 +25,6 @@
     "electron:dev": "npm run build && electron electron/main.cjs --dev",
     "electron:pack": "npm run build && electron-builder --dir --win --x64",
     "electron:build": "npm run build && electron-builder --win --x64 --publish=never",
-    "electron:portable": "npm run build && electron-builder --win portable --x64 --publish=never",
     "electron:build:linux": "npm run build && electron-builder --linux --publish=never",
     "electron:build:mac": "npm run build && electron-builder --mac --publish=never"
   },
@@ -106,12 +105,6 @@
           "arch": [
             "x64"
           ]
-        },
-        {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
         }
       ],
       "icon": "electron/icon.png"
@@ -131,6 +124,12 @@
       "target": [
         {
           "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "AppImage",
           "arch": [
             "x64"
           ]
@@ -169,7 +168,7 @@
       ],
       "target": [
         {
-          "target": "zip",
+          "target": "dmg",
           "arch": [
             "arm64"
           ]
