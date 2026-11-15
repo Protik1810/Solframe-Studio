@@ -154,7 +154,8 @@
             "**/*"
           ]
         }
-      ]
+      ],
+      "artifactName": "Solframe-Studio-${version}.${ext}"
     },
     "mac": {
       "extraResources": [
@@ -175,7 +176,8 @@
         }
       ],
       "category": "public.app-category.graphics-design",
-      "icon": "electron/icon.png"
+      "icon": "electron/icon.png",
+      "artifactName": "Solframe-Studio-${version}-arm64.${ext}"
     },
     "directories": {
       "output": "release"
