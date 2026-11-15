@@ -33,10 +33,12 @@ as the GitHub Release body) — the two overlap on content, not on purpose.
 ### Website
 
 - Showcase page gains three feature cards (AI Video Generation, AI Music
-  Studio, One-Click AI Music Videos), a background music player ("Night
-  Compile", ACE-Step-generated, with an on-screen mute toggle), and a
-  6-second ambient brand loop (1366×768, first frame == last frame) rendered
-  by the MiniMax H3 engine from one of the site's own theme emblems.
+  Studio, One-Click AI Music Videos), a background music player with per-theme
+  instrumental loops (ACE-Step-generated, no vocals, mute toggle on screen),
+  and a 6-second ambient brand loop as the Showcase section's moving
+  background (1366×768, first frame == last frame bit-exact) rendered by the
+  MiniMax H3 engine from one of the site's own theme emblems. Website only —
+  the desktop app keeps its still theme images.
 
 ## [1.1.5] — 2026-11-14
 

@@ -31,10 +31,14 @@ const copyAsset = (relPath, destSubpath) => {
 
 const logoUrl = copyAsset('public/logo.png', 'logo.png');
 const faviconUrl = copyAsset('public/favicon.png', 'favicon.png');
-// v1.2.0 media: "Night Compile" background track + the 6s ambient brand loop,
-// both generated locally by Solframe's own music and video engines.
-const audioUrl = copyAsset('public/audio/night_compile.mp3', 'audio/night_compile.mp3');
+// v1.2.0 media: the 6s ambient brand loop + one instrumental background loop
+// per theme, both generated locally by Solframe's own engines (no vocals).
 const videoLoopUrl = copyAsset('public/video/solframe-brand-loop.mp4', 'video/solframe-brand-loop.mp4');
+const THEME_KEYS_BG = ['dark-void', 'neon-cyber', 'cinema-gold', 'synthwave', 'anime-fantasy', 'emerald-matrix'];
+const themeTracks = {};
+for (const key of THEME_KEYS_BG) {
+  themeTracks[`AUDIO_BG_${key}`] = copyAsset(`public/audio/bg_${key}.mp3`, `audio/bg_${key}.mp3`);
+}
 // The footer links to these by relative path — without copying them here,
 // they 404 on the live site since docs/ never had them.
 copyAsset('LICENSE', 'LICENSE');
@@ -132,7 +136,7 @@ const replacements = {
   SITE_BASE_URL,
   FAVICON_URL: faviconUrl,
   OG_IMAGE_URL: `${SITE_BASE_URL}${logoUrl}`,
-  AUDIO_NIGHT_COMPILE: audioUrl,
+  ...themeTracks,
   VIDEO_BRAND_LOOP: videoLoopUrl,
   // electron-builder's productName ("Solframe Studio") has a space, and
   // GitHub replaces spaces with dots when it sanitizes uploaded release

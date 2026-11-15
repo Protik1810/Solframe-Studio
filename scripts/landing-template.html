@@ -3117,6 +3117,8 @@
     function selectTheme(themeName) {
       document.body.setAttribute('data-theme', themeName);
       localStorage.setItem('solframe_theme', themeName);
+      // Notify the background-music player to swap to this theme's instrumental.
+      try { window.dispatchEvent(new CustomEvent('solframe-theme-change', { detail: { theme: themeName } })); } catch (err) {}
 
       // Update emblems
       const emblemSrc = themeEmblemsData[themeName] || themeEmblemsData['emerald-matrix'];
@@ -3159,10 +3161,11 @@
     }
   </script>
 
-  <!-- Background music: "Night Compile" (AI-composed locally by ACE-Step in Solframe v1.2.0).
-       Starts muted — browsers block autoplay with sound — the on-screen toggle unmutes. -->
-  <audio id="bgAudio" src="{{AUDIO_NIGHT_COMPILE}}" loop autoplay muted preload="auto"></audio>
-  <button id="bgAudioToggle" type="button" aria-label="Unmute background music" title="Background music: Night Compile (AI-generated locally in Solframe)">
+  <!-- Background music: per-theme instrumental loops, generated locally by
+       ACE-Step in Solframe v1.2.0 (no vocals). Starts muted — browsers block
+       autoplay with sound — the on-screen toggle unmutes. -->
+  <audio id="bgAudio" src="{{AUDIO_BG_dark-void}}" loop autoplay muted preload="auto"></audio>
+  <button id="bgAudioToggle" type="button" aria-label="Unmute background music" title="Background music: per-theme instrumental loops (AI-generated locally in Solframe)">
     <svg id="bgAudioIconOn" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="display:none">
       <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05A4.5 4.5 0 0 0 16.5 12z"/>
     </svg>
@@ -3241,13 +3244,24 @@
       var iconOn = document.getElementById('bgAudioIconOn');
       var iconOff = document.getElementById('bgAudioIconOff');
       var label = document.getElementById('bgAudioLabel');
+      // Per-theme instrumental tracks (generated locally by ACE-Step, no vocals)
+      var THEME_TRACKS = {
+        'dark-void':      { src: '{{AUDIO_BG_dark-void}}',      name: 'Dark Void Ambient' },
+        'neon-cyber':     { src: '{{AUDIO_BG_neon-cyber}}',     name: 'Neon Cyber Pulse' },
+        'cinema-gold':    { src: '{{AUDIO_BG_cinema-gold}}',    name: 'Cinema Gold Strings' },
+        'synthwave':      { src: '{{AUDIO_BG_synthwave}}',      name: 'Synthwave Drift' },
+        'anime-fantasy':  { src: '{{AUDIO_BG_anime-fantasy}}',  name: 'Anime Fantasy Harp' },
+        'emerald-matrix': { src: '{{AUDIO_BG_emerald-matrix}}', name: 'Emerald Matrix' }
+      };
       if (!audio || !toggle) return;
       audio.volume = 0.4;
       function paint() {
         var unmuted = audio && !audio.muted;
         iconOn.style.display = unmuted ? '' : 'none';
         iconOff.style.display = unmuted ? 'none' : '';
-        label.textContent = unmuted ? 'Mute' : 'Play: Night Compile';
+        var t = THEME_TRACKS[localStorage.getItem('solframe_theme')] || null;
+        var name = t ? t.name : 'Theme Ambient';
+        label.textContent = unmuted ? ('Mute — ' + name) : ('Play: ' + name);
         toggle.setAttribute('aria-label', unmuted ? 'Mute background music' : 'Unmute background music');
         toggle.classList.toggle('playing', unmuted);
       }
@@ -3258,6 +3272,18 @@
       });
       audio.addEventListener('play', paint);
       audio.addEventListener('pause', paint);
+      // Theme switch swaps the track without losing the mute state.
+      window.addEventListener('solframe-theme-change', function (e) {
+        var key = e && e.detail && e.detail.theme;
+        var t = THEME_TRACKS[key];
+        if (!t || audio.src === t.src) return;
+        var wasUnmuted = !audio.muted && !audio.paused;
+        audio.src = t.src;
+        audio.load();
+        var p = audio.play(); if (p && p.catch) p.catch(function(){});
+        if (!wasUnmuted) audio.muted = true;
+        paint();
+      });
       paint();
     })();
   </script>

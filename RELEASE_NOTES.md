@@ -10,7 +10,7 @@ Solframe composes **complete songs with vocals** from a single text prompt. The 
 
 - **Prompt to song**: style prompt + optional full lyrics, up to 4+ minutes per track, 48 kHz output.
 - **Sung, not hummed**: the LM writes and performs the lyric sheet — intro, verses, chorus, outro.
-- **Example**: the track playing behind this very page — _Night Compile_ — was generated end-to-end by the same engine in about 4 minutes on an RTX 4070 Ti.
+- **Heard on this page**: the six short instrumental loops behind the site — one per theme — were generated the same way: ACE-Step, local GPU, no vocals, no cloud. (A full sung example, _Night Compile_, ships in the repo's test specs.)
 
 ### 🎬 One-click AI music videos
 
