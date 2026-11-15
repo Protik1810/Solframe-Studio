@@ -92,7 +92,7 @@ describe('MusicVideoStudio', () => {
     expect(screen.getByText(/no music video yet/i)).toBeTruthy();
   });
 
-  it('starts a job on Generate and polls scenes into the canvas', { testTimeout: 12000 }, async () => {
+  it('starts a job on Generate and polls scenes into the canvas', async () => {
     (musicVideoService.status as any).mockResolvedValue(midFlightStatus);
     renderStudio();
     await waitFor(() => expect(musicVideoService.config).toHaveBeenCalled());
