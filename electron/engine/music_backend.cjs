@@ -186,9 +186,25 @@ async function ensureAceServer(rootDir, resourcesPath, opts = {}) {
   if (opts.modelsDir) {
     try { fs.mkdirSync(opts.modelsDir, { recursive: true }); } catch (e) {}
   }
+  // entry point: the staged tree may carry api_server.py at the repo root
+  // or inside the acestep package — resolve whichever exists instead of
+  // hard-coding a layout (a wrong guess makes the server die at spawn)
+  const aceDir = path.join(runtime, 'ace');
+  const aceEntry = [
+    path.join(aceDir, 'api_server.py'),
+    path.join(aceDir, 'acestep', 'api_server.py'),
+  ].find((p) => fs.existsSync(p));
+  if (!aceEntry) {
+    return { ok: false, url, source: 'none', error: `ACE entry point not found under ${aceDir}` };
+  }
+
   const env = {
     ...process.env,
     PYTHONIOENCODING: 'utf-8',
+    // the acestep package lives at the root of the staged ace tree; the
+    // script's own dir is not enough for `import acestep` when the entry
+    // sits inside the package
+    PYTHONPATH: aceDir,
     ACESTEP_CONFIG_PATH: 'acestep-v15-turbo',
     ACESTEP_LM_MODEL_PATH: 'acestep-5Hz-lm-1.7B',
     ACESTEP_LM_BACKEND: 'pt',
@@ -198,8 +214,8 @@ async function ensureAceServer(rootDir, resourcesPath, opts = {}) {
     ACESTEP_CHECKPOINTS_DIR: opts.modelsDir || path.join(runtime, 'checkpoints'),
     PORT: String(ACE_PORT_DEFAULT),
   };
-  aceProc = spawn(py, ['ace/api_server.py'], {
-    cwd: path.join(runtime, 'ace'),
+  aceProc = spawn(py, [aceEntry], {
+    cwd: aceDir,
     env,
     windowsHide: true,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -208,8 +224,10 @@ async function ensureAceServer(rootDir, resourcesPath, opts = {}) {
   aceProc.stderr.on('data', () => {});
   aceProc.on('exit', () => { aceProc = null; });
 
-  // server binds fast (NO_INIT), model init happens on demand
-  for (let i = 0; i < 30; i++) {
+  // server binds fast (NO_INIT — weights lazy-load on demand), but cold
+  // imports are the real cost: a fresh extraction has no __pycache__, so
+  // the first boot compiles the whole stack (~30-60s+). Give it room.
+  for (let i = 0; i < 120; i++) {
     await new Promise((r) => setTimeout(r, 1000));
     if (await httpProbe(`${url}/health`)) return { ok: true, url, source: 'bundled' };
     if (aceProc === null) break; // died at startup
