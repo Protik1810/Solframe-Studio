@@ -1,10 +1,16 @@
 /**
  * music_backend.cjs — lifecycle for the BUNDLED ACE-Step music server.
  *
- * The v1.2.0 installers ship the full ACE-Step runtime under resources/music/:
- *   music/python/  — uv-managed standalone CPython (relocatable)
- *   music/venv/    — the ACE-Step dependency env (torch, diffusers, ...)
- *   music/ace/     — the ACE-Step source tree (acestep/, api server, scripts)
+ * The v1.2.0 installers ship the full ACE-Step runtime inside the app:
+ *   music/python/              — uv-managed standalone CPython (relocatable);
+ *                                also the extractor for the runtime archive
+ *   music-runtime.tar.xz       — the ACE-Step dependency env (venv/) + the
+ *                                ACE-Step source tree (ace/), extracted once
+ *                                on first use into resources/music/
+ *
+ * A plain install dir (PrivilegesRequired=lowest) is user-writable, so the
+ * archive self-extracts next to the bundled python and every later launch
+ * finds the runtime already in place.
  *
  * A venv copied off the build machine carries a stale pyvenv.cfg `home`
  * pointing at the build box's interpreter — every spawned process would
@@ -57,6 +63,40 @@ function findRuntime(rootDir, resourcesPath) {
   return null;
 }
 
+/**
+ * Packaged-install fallback: the runtime archive (music-runtime.tar.xz) plus
+ * the extractor python are shipped under resources; the extracted tree is not.
+ * Extraction is one-time (~2-4 min on first music use), performed by the
+ * bundled python's own tarfile module — no external tools required.
+ */
+function findRuntimeArchive(resourcesPath) {
+  if (!resourcesPath) return null;
+  const archive = path.join(resourcesPath, 'music-runtime.tar.xz');
+  const pythonExe = process.platform === 'win32'
+    ? path.join(resourcesPath, 'music', 'python', 'python.exe')
+    : path.join(resourcesPath, 'music', 'python', 'bin', 'python');
+  if (!fs.existsSync(archive) || !fs.existsSync(pythonExe)) return null;
+  return { archive, pythonExe, destDir: path.join(resourcesPath, 'music') };
+}
+
+function extractRuntimeArchive(archive, pythonExe, destDir) {
+  const script = 'import sys, tarfile; tarfile.open(sys.argv[1]).extractall(sys.argv[2])';
+  return new Promise((resolve) => {
+    fs.mkdirSync(destDir, { recursive: true });
+    const p = spawn(pythonExe, ['-c', script, archive, destDir], {
+      windowsHide: true,
+      stdio: ['ignore', 'ignore', 'pipe'],
+    });
+    let err = '';
+    p.stderr.on('data', (d) => { err += d; });
+    p.on('exit', (code) => {
+      const ok = code === 0 && fs.existsSync(path.join(destDir, 'venv'));
+      resolve(ok ? null : `music runtime extraction failed (exit ${code})${err ? ': ' + err.slice(-400) : ''}`);
+    });
+    p.on('error', (e) => resolve(`music runtime extraction failed to start: ${e.message}`));
+  });
+}
+
 /** Rewrite the copied venv's pyvenv.cfg home → bundled python. Idempotent. */
 function bootstrapVenv(rt) {
   try {
@@ -90,11 +130,18 @@ async function ensureAceServer(rootDir, resourcesPath, opts = {}) {
   if (await httpProbe(`${url}/health`)) return { ok: true, url, source: 'external' };
 
   const rt = findRuntime(rootDir, resourcesPath);
-  if (!rt) return { ok: false, url, source: 'none', error: 'no bundled music runtime and no external ACE server' };
+  if (!rt) {
+    const ar = findRuntimeArchive(resourcesPath);
+    if (!ar) return { ok: false, url, source: 'none', error: 'no bundled music runtime and no external ACE server' };
+    const extractErr = await extractRuntimeArchive(ar.archive, ar.pythonExe, ar.destDir);
+    if (extractErr) return { ok: false, url, source: 'none', error: extractErr };
+  }
+  const runtime = rt || findRuntime(rootDir, resourcesPath);
+  if (!runtime) return { ok: false, url, source: 'none', error: 'music runtime archive extracted but runtime still not found' };
 
-  const py = acePython(rt);
-  if (!py) return { ok: false, url, source: 'none', error: `bundled runtime incomplete (no venv python): ${rt}` };
-  bootstrapVenv(rt);
+  const py = acePython(runtime);
+  if (!py) return { ok: false, url, source: 'none', error: `bundled runtime incomplete (no venv python): ${runtime}` };
+  bootstrapVenv(runtime);
 
   if (opts.modelsDir) {
     try { fs.mkdirSync(opts.modelsDir, { recursive: true }); } catch (e) {}
@@ -108,11 +155,11 @@ async function ensureAceServer(rootDir, resourcesPath, opts = {}) {
     ACESTEP_DEVICE: 'auto',
     ACESTEP_INIT_LLM: 'auto',
     ACESTEP_NO_INIT: 'true',
-    ACESTEP_CHECKPOINTS_DIR: opts.modelsDir || path.join(rt, 'checkpoints'),
+    ACESTEP_CHECKPOINTS_DIR: opts.modelsDir || path.join(runtime, 'checkpoints'),
     PORT: String(ACE_PORT_DEFAULT),
   };
   aceProc = spawn(py, ['ace/api_server.py'], {
-    cwd: path.join(rt, 'ace'),
+    cwd: path.join(runtime, 'ace'),
     env,
     windowsHide: true,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -137,4 +184,4 @@ function stopAceServer() {
   }
 }
 
-module.exports = { ensureAceServer, stopAceServer, findRuntime, bootstrapVenv };
+module.exports = { ensureAceServer, stopAceServer, findRuntime, findRuntimeArchive, bootstrapVenv };

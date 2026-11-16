@@ -96,3 +96,7 @@ installer-output/
 
 # Vitest coverage report (regenerate with `npm run test:coverage`)
 coverage/
+
+# Music engine runtime (staged on build machines only, never committed)
+backend/win/music/
+backend/win/music-runtime.tar.xz

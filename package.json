@@ -89,15 +89,17 @@
           "from": "backend/win",
           "to": "backend/win",
           "filter": [
-            "**/*"
+            "**/*",
+            "!music/**"
           ]
         },
         {
-          "from": "backend/win/music",
-          "to": "music",
-          "filter": [
-            "**/*"
-          ]
+          "from": "backend/win/music/python",
+          "to": "music/python"
+        },
+        {
+          "from": "backend/win/music-runtime.tar.xz",
+          "to": "music-runtime.tar.xz"
         }
       ],
       "target": [
