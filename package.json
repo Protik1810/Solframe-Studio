@@ -90,7 +90,8 @@
           "to": "backend/win",
           "filter": [
             "**/*",
-            "!music/**"
+            "!music/**",
+            "!music-runtime.tar.xz"
           ]
         },
         {
