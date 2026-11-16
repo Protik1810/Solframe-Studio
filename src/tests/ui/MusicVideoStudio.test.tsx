@@ -16,6 +16,16 @@ vi.mock('../../services/musicVideoApi', () => ({
     status: vi.fn(),
     cancel: vi.fn(),
     fileUrl: vi.fn((name: string) => `/api/musicvideo/file/${encodeURIComponent(name)}`),
+    // music runtime setup (v1.2.0): the tab polls this on mount; default to
+    // "runtime installed" so the setup banner stays out of existing tests
+    runtime: vi.fn(async () => ({
+      installed: true,
+      archivePresent: false,
+      archiveBytes: 0,
+      download: { phase: 'idle', received: 0, total: 0, error: null, source: null },
+    })),
+    startRuntimeDownload: vi.fn(async () => true),
+    importRuntime: vi.fn(async () => ({ ok: true })),
   },
 }));
 
