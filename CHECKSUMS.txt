@@ -1,5 +1,6 @@
-f77685121a691655096c5de4b08b6c9ffbe6698e9a62d50362e4f3e1904887c4  Solframe-Studio-Setup-1.2.0.exe
+82989b9cbcfffe108b4e1b6ffe876c051734af313d53dca373823ca127dc7d950  Solframe-Studio-Setup-1.2.0.exe
 c44ead7208ffc3b37045e21a30b61a16781204b9e46bfcba894dee4ed7cf1928  Solframe-Studio-Setup-1.2.0-Lightweight.exe
 adb2c944a6bc974e46e74a9653498e493bb034c3df5d77ce846e9480eeb2cb03  Solframe-Studio-1.2.0.AppImage
 dcd71d2cff8231f1c0ab6b3e3be58e1312379c0d714967145246b04d66e523eb  solframe-studio_1.2.0_amd64.deb
+3f6dedfa0dc78dafe9a4969d29a38040306c83c0013dcd263e245b0e100067dc  music-runtime.tar.xz
 cad7758ec077095e6c34c24e2ab82ed16846c097c5b9b9ccabb6adb754fed1cd  Solframe-Studio-1.2.0-arm64.dmg
