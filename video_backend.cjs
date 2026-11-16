@@ -41,7 +41,9 @@
  *   GET  /api/video/models       -> video server /v1/video/models
  *   GET  /api/video/files        -> video server /v1/video/files (generated mp4 list)
  *   GET  /api/video/file/<name>  -> video server /v1/files/<name> (stream mp4)
- *   GET  /api/video/runtime      -> bundled runtime install/extract status
+ *   GET  /api/video/runtime       -> bundled runtime install/extract status
+ *   POST /api/video/runtime/download -> start release-page archive download
+ *   POST /api/video/runtime/import   -> import an already-downloaded archive
  *   POST /api/video/generate     -> video server /v1/video/generations (sync, long)
  */
 const http = require('http');
@@ -53,7 +55,9 @@ const { spawn } = require('child_process');
 
 const VIDEO_PORT = 8766;
 const VIDEO_HOST = '127.0.0.1';
-const VIDEO_ARCHIVE = 'video-runtime.tar.xz';
+const RUNTIME_ASSET = 'video-runtime.tar.xz';
+const REPO_SLUG = 'Protik1810/Solframe-Studio';
+const VIDEO_ARCHIVE = RUNTIME_ASSET;
 
 let videoProc = null;          // child process we spawned (if any)
 let videoProcRoot = null;      // repo root the child was started from
@@ -240,6 +244,49 @@ function isDevRuntime(runtime, rootDir) {
   });
 }
 
+/** Release-asset URL for the runtime archive, keyed off the app's version. */
+function releaseDownloadUrl(rootDir) {
+  try {
+    const pkg = require(path.join(rootDir, 'package.json'));
+    return pkg && pkg.version
+      ? `https://github.com/${REPO_SLUG}/releases/download/v${pkg.version}/${RUNTIME_ASSET}`
+      : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * Stream the runtime archive from the release page to destPath. Uses Node's
+ * own fetch (same stance as the music runtime's downloader — no external
+ * curl). Progress is reported through onProgress(received, totalBytes).
+ */
+async function downloadRuntimeArchive(url, destPath, onProgress) {
+  const res = await fetch(url, { redirect: 'follow' });
+  if (!res.ok || !res.body) {
+    throw new Error(`runtime download failed: HTTP ${res.status} for ${url}`);
+  }
+  fs.mkdirSync(path.dirname(destPath), { recursive: true });
+  const total = Number(res.headers.get('content-length')) || 0;
+  let received = 0;
+  const out = fs.createWriteStream(destPath);
+  await new Promise((resolve, reject) => {
+    res.body.on('data', (chunk) => {
+      received += chunk.length;
+      out.write(chunk);
+      if (onProgress) { try { onProgress(received, total); } catch (e) {} }
+    });
+    res.body.on('error', reject);
+    res.body.on('end', () => out.end(resolve));
+    out.on('error', reject);
+  });
+  if (received < 1024 * 1024) {
+    try { fs.unlinkSync(destPath); } catch (e) {}
+    throw new Error(`runtime download too small (${received} bytes) — aborted`);
+  }
+  return { destPath, bytes: received };
+}
+
 /**
  * Weights root for SOLFRAME_VIDEO_MODELS — the SAME root the app's Model
  * Manager downloads into, so user-downloaded LTX/Wan/H3 weights are found
@@ -396,6 +443,44 @@ function proxyToVideoServer(req, res, targetPath) {
 
 let currentApiKey = '';
 
+// video runtime acquisition state (module-level: survives across requests;
+// one download/import at a time — same pattern as music_video.cjs)
+const runtimeDownload = {
+  phase: 'idle', // idle | downloading | importing | ready | error
+  received: 0,
+  total: 0,
+  error: null,
+  source: null, // 'download' | 'import'
+  startedAt: 0,
+  finishedAt: 0,
+};
+
+function startRuntimeAcquire(source, fn) {
+  runtimeDownload.phase = source === 'download' ? 'downloading' : 'importing';
+  runtimeDownload.received = 0;
+  runtimeDownload.total = 0;
+  runtimeDownload.error = null;
+  runtimeDownload.source = source;
+  runtimeDownload.startedAt = Date.now();
+  runtimeDownload.finishedAt = 0;
+  (async () => {
+    try {
+      await fn((received, total) => {
+        runtimeDownload.received = received;
+        if (total) runtimeDownload.total = total;
+      });
+      runtimeDownload.phase = 'ready';
+      runtimeDownload.finishedAt = Date.now();
+    } catch (e) {
+      runtimeDownload.phase = 'error';
+      runtimeDownload.error = e.message;
+      runtimeDownload.finishedAt = Date.now();
+    }
+  })();
+}
+
+const sendJson = (res, code, obj) => { res.statusCode = code; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(obj)); };
+
 async function handleVideoApi(req, res, ctx = {}) {
   const rootDir = ctx.rootDir || process.cwd();
   const resourcesPath = ctx.resourcesPath || rootDir;
@@ -407,11 +492,68 @@ async function handleVideoApi(req, res, ctx = {}) {
   if (p.startsWith('/api/video')) p = p.replace('/api/video', '');
   const pathname = (p.split('?')[0] || '');
 
-  // Runtime status for the video tab's setup banner (no download URL — the
-  // archive ships inside the installer or is dropped by the user).
+  // Runtime status for the video tab's setup banner, plus acquisition routes
+  // mirroring the music pipeline's (/api/musicvideo/runtime/*).
   if (pathname === '/runtime') {
-    res.setHeader('Content-Type', 'application/json');
-    return res.end(JSON.stringify({ ok: true, data: runtimeStatus(rootDir, resourcesPath) }));
+    return sendJson(res, 200, {
+      ...runtimeStatus(rootDir, resourcesPath),
+      download: {
+        phase: runtimeDownload.phase,
+        received: runtimeDownload.received,
+        total: runtimeDownload.total,
+        error: runtimeDownload.error,
+        source: runtimeDownload.source,
+      },
+    });
+  }
+  if (pathname === '/runtime/download' && req.method === 'POST') {
+    const rt = runtimeStatus(rootDir, resourcesPath);
+    if (rt.installed) return sendJson(res, 200, { ok: true, message: 'runtime already installed' });
+    if (runtimeDownload.phase === 'downloading' || runtimeDownload.phase === 'importing') {
+      return sendJson(res, 200, { ok: true, message: `already ${runtimeDownload.phase}` });
+    }
+    if (!rt.downloadUrl) return sendJson(res, 400, { error: 'no download URL — app version unknown' });
+    startRuntimeAcquire('download', (onProgress) =>
+      downloadRuntimeArchive(rt.downloadUrl, rt.expectedArchivePath, onProgress));
+    return sendJson(res, 202, { ok: true, url: rt.downloadUrl, dest: rt.expectedArchivePath });
+  }
+  if (pathname === '/runtime/import' && req.method === 'POST') {
+    if (runtimeDownload.phase === 'downloading' || runtimeDownload.phase === 'importing') {
+      return sendJson(res, 409, { error: `another acquisition is ${runtimeDownload.phase}` });
+    }
+    const chunks = [];
+    req.on('data', (c) => chunks.push(c));
+    req.on('end', () => {
+      let body;
+      try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
+      catch (e) { return sendJson(res, 400, { error: 'invalid JSON body' }); }
+      const src = typeof body.archivePath === 'string' ? body.archivePath.trim() : '';
+      if (!src) return sendJson(res, 400, { error: 'archivePath required' });
+      let st;
+      try { st = fs.statSync(src); } catch (e) { return sendJson(res, 400, { error: `file not found: ${src}` }); }
+      if (!st.isFile()) return sendJson(res, 400, { error: `not a file: ${src}` });
+      if (st.size < 1024 * 1024) return sendJson(res, 400, { error: `file too small (${st.size} bytes) to be the video runtime` });
+      const rt = runtimeStatus(rootDir, resourcesPath);
+      if (rt.installed) return sendJson(res, 200, { ok: true, message: 'runtime already installed' });
+      const dest = rt.expectedArchivePath;
+      if (path.resolve(src) === path.resolve(dest)) return sendJson(res, 200, { ok: true, message: 'already in place' });
+      startRuntimeAcquire('import', async (onProgress) => {
+        await new Promise((resolve, reject) => {
+          let tick;
+          fs.mkdirSync(path.dirname(dest), { recursive: true });
+          tick = setInterval(() => {
+            try { onProgress(fs.statSync(dest).size, st.size); } catch (e) {}
+          }, 500);
+          fs.copyFile(src, dest, (err) => {
+            clearInterval(tick);
+            err ? reject(err) : resolve();
+          });
+        });
+        return { dest, bytes: st.size };
+      });
+      return sendJson(res, 202, { ok: true, dest });
+    });
+    return;
   }
 
   // Health probe auto-starts the backend so the UI can show "waking" state.
@@ -478,6 +620,7 @@ function runtimeStatus(rootDir, resourcesPath, opts = {}) {
     archivePath: ar ? ar.archive : null,
     archiveBytes,
     destDir: ar ? ar.destDir : path.join(userDataDir, 'video'),
+    downloadUrl: releaseDownloadUrl(rootDir),
   };
 }
 
@@ -485,4 +628,5 @@ module.exports = {
   handleVideoApi, ensureVideoServer, stopVideoServer, probePort,
   findVideoRuntime, findVideoRuntimeArchive, bootstrapVenv,
   defaultUserDataDir, pickRuntimePython, resolveVideoModelsRoot, runtimeStatus,
+  releaseDownloadUrl, downloadRuntimeArchive,
 };

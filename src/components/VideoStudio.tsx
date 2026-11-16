@@ -5,6 +5,7 @@ import {
   VideoModelInfo,
   VideoResult,
   VideoFileInfo,
+  VideoRuntimeFull,
 } from '../services/videoApi';
 
 interface VideoStudioProps {
@@ -52,6 +53,24 @@ export const VideoStudio: React.FC<VideoStudioProps> = ({
   const [elapsed, setElapsed] = useState<number>(0);
   const [current, setCurrent] = useState<VideoResult | null>(null);
   const [files, setFiles] = useState<VideoFileInfo[]>([]);
+
+  // Video runtime setup: poll while it's not installed (covers download and
+  // import progress) — same pattern as the music tab's setup banner.
+  const [runtime, setRuntime] = useState<VideoRuntimeFull | null>(null);
+  const [importPath, setImportPath] = useState<string>('');
+  useEffect(() => {
+    let alive = true;
+    let iv: ReturnType<typeof setInterval> | null = null;
+    const tick = async () => {
+      const r = await videoService.runtime();
+      if (!alive) return;
+      setRuntime(r);
+      if (r?.installed && iv) { clearInterval(iv); iv = null; }
+    };
+    tick();
+    iv = setInterval(tick, 2000);
+    return () => { alive = false; if (iv) clearInterval(iv); };
+  }, []);
 
   // ─── Boot: models + health + files ─────────────────────────────────────────
   useEffect(() => {
@@ -124,6 +143,13 @@ export const VideoStudio: React.FC<VideoStudioProps> = ({
       return;
     }
     if (generating) return;
+    if (runtime && !runtime.installed && runtime.download.phase !== 'ready') {
+      onError(
+        'Video Engine Not Installed',
+        'The video engine needs a one-time ~5.8 GB runtime. Use the setup panel above to download it (or import a video-runtime.tar.xz you already have), then try again. It unpacks automatically on first use.'
+      );
+      return;
+    }
     setGenerating(true);
     setElapsed(0);
     onGenerateStart?.();
@@ -224,6 +250,97 @@ export const VideoStudio: React.FC<VideoStudioProps> = ({
 
       {/* ─── Controls ─────────────────────────────────────────────────────── */}
       <div className="glass-panel studio-controls" style={{ overflowY: 'auto' }}>
+        {/* Video runtime setup — one-time download or import */}
+        {runtime && !runtime.installed && (
+          <div
+            className="control-group"
+            style={{
+              border: '1px solid rgba(234, 179, 8, 0.35)',
+              background: 'rgba(234, 179, 8, 0.08)',
+              padding: '12px',
+              borderRadius: '10px',
+            }}
+          >
+            <div className="control-label" style={{ color: '#eab308' }}>
+              <Download size={12} style={{ verticalAlign: -2, marginRight: 4 }} />
+              Video engine setup
+            </div>
+            {runtime.download.phase === 'downloading' || runtime.download.phase === 'importing' ? (
+              <>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                  {runtime.download.phase === 'downloading' ? 'Downloading' : 'Importing'} video engine ({runtime.download.source === 'import' ? 'import' : 'from GitHub'}) —{' '}
+                  {runtime.download.total ? `${fmtSize(runtime.download.received)} / ${fmtSize(runtime.download.total)}` : fmtSize(runtime.download.received)}
+                </div>
+                <div style={{ height: '6px', borderRadius: '3px', background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                  <div
+                    style={{
+                      height: '100%',
+                      width: runtime.download.total ? `${Math.min(100, (runtime.download.received / runtime.download.total) * 100)}%` : '100%',
+                      background: 'var(--accent, #4ade80)',
+                      transition: 'width 0.5s ease',
+                      opacity: runtime.download.total ? 1 : 0.5,
+                    }}
+                  />
+                </div>
+              </>
+            ) : runtime.download.phase === 'ready' ? (
+              <div style={{ fontSize: '12px', color: 'var(--text-primary)' }}>
+                ✓ Video engine downloaded — it unpacks automatically the first time you generate.
+              </div>
+            ) : runtime.download.phase === 'error' ? (
+              <>
+                <div style={{ fontSize: '12px', color: '#f87171', marginBottom: '8px' }}>
+                  {runtime.download.error || 'Video engine download failed.'}
+                </div>
+                <button
+                  className="btn-primary"
+                  style={{ fontSize: '12px', padding: '6px 14px' }}
+                  onClick={() => videoService.startRuntimeDownload()}
+                >
+                  Retry download
+                </button>
+              </>
+            ) : runtime.archivePresent ? (
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                Video engine archive found ({fmtSize(runtime.archiveBytes)}) — it unpacks automatically on first use.
+              </div>
+            ) : (
+              <>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                  Video generation needs a one-time <strong>~5.8 GB</strong> runtime download (video engine — model weights are separate and free).
+                </div>
+                <button
+                  className="btn-primary"
+                  style={{ fontSize: '12px', padding: '6px 14px', marginRight: '8px' }}
+                  onClick={() => videoService.startRuntimeDownload()}
+                >
+                  <Download size={12} style={{ verticalAlign: -2, marginRight: 4 }} />
+                  Download video engine
+                </button>
+                <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
+                  <input
+                    className="styled-input"
+                    style={{ flex: 1, fontSize: '11px' }}
+                    placeholder="…or import a downloaded video-runtime.tar.xz: paste its full path"
+                    value={importPath}
+                    onChange={(e) => setImportPath(e.target.value)}
+                  />
+                  <button
+                    className="btn-secondary"
+                    style={{ fontSize: '11px', padding: '4px 10px', whiteSpace: 'nowrap' }}
+                    onClick={async () => {
+                      if (!importPath.trim()) return;
+                      const r = await videoService.importRuntime(importPath.trim());
+                      if (!r.ok) onError('Video Engine Import', r.error || 'Import failed.');
+                    }}
+                  >
+                    Import
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
         <div className="control-group">
           <div className="control-label">Video Engine</div>
           <div className="ratio-grid">

@@ -99,10 +99,6 @@
         {
           "from": "backend/win/music/python",
           "to": "music/python"
-        },
-        {
-          "from": "backend/win/video-runtime.tar.xz",
-          "to": "video-runtime.tar.xz"
         }
       ],
       "target": [

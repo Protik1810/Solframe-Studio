@@ -22,10 +22,10 @@ export interface VideoModelInfo {
 export interface VideoJobParams {
   prompt: string;
   negative_prompt?: string;
-  first_frame?: string;   // http(s) URL, data: URL, local path or /v1/files/<name>
+  first_frame?: string; // http(s) URL, data: URL, local path or /v1/files/<name>
   seconds?: number;
   fps?: number;
-  resolution?: string;    // "WxH"
+  resolution?: string; // "WxH"
   model?: string;
   seed?: number;
   steps?: number;
@@ -54,9 +54,31 @@ export interface VideoFileInfo {
   modified: string;
 }
 
+export interface VideoRuntimeInfo {
+  installed: boolean;
+  archivePresent: boolean;
+  archiveBytes: number;
+  downloadUrl?: string | null;
+  expectedArchivePath?: string | null;
+}
+
+export interface VideoRuntimeDownloadState {
+  phase: 'idle' | 'downloading' | 'importing' | 'ready' | 'error';
+  received: number;
+  total: number;
+  error?: string | null;
+  source?: 'download' | 'import' | null;
+}
+
+export type VideoRuntimeFull = VideoRuntimeInfo & { download: VideoRuntimeDownloadState };
+
 async function json(res: Response): Promise<any> {
   const text = await res.text();
-  try { return JSON.parse(text); } catch { return { error: text }; }
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { error: text };
+  }
 }
 
 export const videoService = {
@@ -98,7 +120,7 @@ export const videoService = {
     const r = await fetch('/api/video/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(params),
+      body: JSON.stringify(params)
     });
     const d = await json(r);
     if (!r.ok) {
@@ -108,4 +130,39 @@ export const videoService = {
     if (!item) throw new Error('video server returned no data');
     return item as VideoResult;
   },
+
+  /** Video runtime setup state (installed / archive / download progress). */
+  async runtime(): Promise<VideoRuntimeFull | null> {
+    try {
+      const r = await fetch('/api/video/runtime');
+      return await json(r);
+    } catch {
+      return null;
+    }
+  },
+
+  /** One-click: download the runtime archive from the release page. */
+  async startRuntimeDownload(): Promise<boolean> {
+    try {
+      const r = await fetch('/api/video/runtime/download', { method: 'POST' });
+      return r.ok;
+    } catch {
+      return false;
+    }
+  },
+
+  /** Import an already-downloaded video-runtime.tar.xz by path. */
+  async importRuntime(archivePath: string): Promise<{ ok: boolean; error?: string }> {
+    try {
+      const r = await fetch('/api/video/runtime/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ archivePath })
+      });
+      const d = await json(r);
+      return { ok: r.ok, error: r.ok ? undefined : d?.error || `HTTP ${r.status}` };
+    } catch (e: any) {
+      return { ok: false, error: e?.message || 'import failed' };
+    }
+  }
 };
