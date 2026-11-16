@@ -97,10 +97,6 @@
         {
           "from": "backend/win/music/python",
           "to": "music/python"
-        },
-        {
-          "from": "backend/win/music-runtime.tar.xz",
-          "to": "music-runtime.tar.xz"
         }
       ],
       "target": [

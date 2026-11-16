@@ -1,16 +1,24 @@
 /**
  * music_backend.cjs — lifecycle for the BUNDLED ACE-Step music server.
  *
- * The v1.2.0 installers ship the full ACE-Step runtime inside the app:
+ * The v1.2.0 Windows installers ship the runtime in two pieces (GitHub caps
+ * release assets at 2 GiB, and the full env does not fit under one file):
  *   music/python/              — uv-managed standalone CPython (relocatable);
  *                                also the extractor for the runtime archive
- *   music-runtime.tar.xz       — the ACE-Step dependency env (venv/) + the
- *                                ACE-Step source tree (ace/), extracted once
- *                                on first use into resources/music/
+ *   Setup-1.2.0.exe            — app + engines only
+ *   music-runtime.tar.xz       — release-page asset; the ACE-Step dependency
+ *                                env (venv/) + the ACE-Step source tree (ace/)
  *
- * A plain install dir (PrivilegesRequired=lowest) is user-writable, so the
- * archive self-extracts next to the bundled python and every later launch
- * finds the runtime already in place.
+ * Resolution order on first music use:
+ *   1. already-extracted runtime (resources/music or ~/SolframeStudio/music)
+ *   2. archive dropped by the user in ~/SolframeStudio/music-runtime.tar.xz
+ *      → extracted once into ~/SolframeStudio/music
+ *   3. archive bundled in resources (fully-bundled builds)
+ *      → extracted once into resources/music
+ * Extraction is performed by the bundled python's own tarfile module — no
+ * external tools required. A plain install dir (PrivilegesRequired=lowest)
+ * is user-writable, but ~/SolframeStudio is writable on every layout, so the
+ * user-data variant is the primary fallback path.
  *
  * A venv copied off the build machine carries a stale pyvenv.cfg `home`
  * pointing at the build box's interpreter — every spawned process would
@@ -28,6 +36,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const http = require('http');
 const { spawn } = require('child_process');
 
@@ -49,13 +58,14 @@ function httpProbe(url, timeoutMs = 4000) {
   });
 }
 
-function findRuntime(rootDir, resourcesPath) {
+function findRuntime(rootDir, resourcesPath, userDataDir) {
   const sub = process.platform === 'win32' ? 'win' : 'linux';
   const candidates = [
     rootDir && path.join(rootDir, 'backend', sub, 'music'),
     // dev on either platform may stage the runtime under its own backend dir
     rootDir && path.join(rootDir, 'backend', 'win', 'music'),
     resourcesPath && path.join(resourcesPath, 'music'),
+    userDataDir && path.join(userDataDir, 'music'),
   ];
   for (const c of candidates) {
     if (c && fs.existsSync(path.join(c, 'venv'))) return c;
@@ -63,20 +73,36 @@ function findRuntime(rootDir, resourcesPath) {
   return null;
 }
 
+/** Where users drop the runtime archive they download from the release page. */
+function defaultUserDataDir() {
+  return path.join(os.homedir(), 'SolframeStudio');
+}
+
 /**
- * Packaged-install fallback: the runtime archive (music-runtime.tar.xz) plus
- * the extractor python are shipped under resources; the extracted tree is not.
- * Extraction is one-time (~2-4 min on first music use), performed by the
- * bundled python's own tarfile module — no external tools required.
+ * Packaged-install fallback: the runtime archive plus the extractor python.
+ * Archive candidates in order — (1) user-data copy downloaded from the
+ * release page, (2) archive bundled under resources. The extracted tree goes
+ * next to whichever archive was found; the bundled python/ dir in resources
+ * is always the extractor and the venv base interpreter.
  */
-function findRuntimeArchive(resourcesPath) {
-  if (!resourcesPath) return null;
-  const archive = path.join(resourcesPath, 'music-runtime.tar.xz');
+function findRuntimeArchive(resourcesPath, userDataDir) {
+  userDataDir = userDataDir || defaultUserDataDir();
   const pythonExe = process.platform === 'win32'
-    ? path.join(resourcesPath, 'music', 'python', 'python.exe')
-    : path.join(resourcesPath, 'music', 'python', 'bin', 'python');
-  if (!fs.existsSync(archive) || !fs.existsSync(pythonExe)) return null;
-  return { archive, pythonExe, destDir: path.join(resourcesPath, 'music') };
+    ? path.join(resourcesPath || '', 'music', 'python', 'python.exe')
+    : path.join(resourcesPath || '', 'music', 'python', 'bin', 'python');
+  const archiveCandidates = [
+    path.join(userDataDir, 'music-runtime.tar.xz'),
+    resourcesPath && path.join(resourcesPath, 'music-runtime.tar.xz'),
+  ];
+  for (const archive of archiveCandidates) {
+    if (!archive || !fs.existsSync(archive)) continue;
+    if (!fs.existsSync(pythonExe)) continue;
+    const destDir = path.dirname(archive) === path.resolve(userDataDir)
+      ? path.join(userDataDir, 'music')
+      : path.join(resourcesPath, 'music');
+    return { archive, pythonExe, destDir };
+  }
+  return null;
 }
 
 function extractRuntimeArchive(archive, pythonExe, destDir) {
@@ -98,10 +124,13 @@ function extractRuntimeArchive(archive, pythonExe, destDir) {
 }
 
 /** Rewrite the copied venv's pyvenv.cfg home → bundled python. Idempotent. */
-function bootstrapVenv(rt) {
+function bootstrapVenv(rt, pythonDir) {
   try {
     const cfgPath = path.join(rt, 'venv', 'pyvenv.cfg');
-    const homeDir = path.join(rt, 'python');
+    // the venv base interpreter: python/ inside the runtime when present
+    // (bundled extraction), otherwise the extractor python shipped in
+    // resources (user-data extraction)
+    const homeDir = pythonDir || path.join(rt, 'python');
     if (!fs.existsSync(cfgPath) || !fs.existsSync(homeDir)) return false;
     const cur = fs.readFileSync(cfgPath, 'utf8');
     const want = `home = ${homeDir}`;
@@ -127,21 +156,32 @@ function acePython(rt) {
  */
 async function ensureAceServer(rootDir, resourcesPath, opts = {}) {
   const url = opts.aceUrl || `http://127.0.0.1:${ACE_PORT_DEFAULT}`;
+  const userDataDir = opts.userDataDir || defaultUserDataDir();
   if (await httpProbe(`${url}/health`)) return { ok: true, url, source: 'external' };
 
-  const rt = findRuntime(rootDir, resourcesPath);
+  const rt = findRuntime(rootDir, resourcesPath, userDataDir);
   if (!rt) {
-    const ar = findRuntimeArchive(resourcesPath);
-    if (!ar) return { ok: false, url, source: 'none', error: 'no bundled music runtime and no external ACE server' };
+    const ar = findRuntimeArchive(resourcesPath, userDataDir);
+    if (!ar) {
+      return {
+        ok: false, url, source: 'none',
+        error: `no music runtime found and no music-runtime.tar.xz in ${userDataDir} — download it from the release page and drop it there`,
+      };
+    }
     const extractErr = await extractRuntimeArchive(ar.archive, ar.pythonExe, ar.destDir);
     if (extractErr) return { ok: false, url, source: 'none', error: extractErr };
   }
-  const runtime = rt || findRuntime(rootDir, resourcesPath);
+  const runtime = rt || findRuntime(rootDir, resourcesPath, userDataDir);
   if (!runtime) return { ok: false, url, source: 'none', error: 'music runtime archive extracted but runtime still not found' };
 
   const py = acePython(runtime);
   if (!py) return { ok: false, url, source: 'none', error: `bundled runtime incomplete (no venv python): ${runtime}` };
-  bootstrapVenv(runtime);
+  // venv base interpreter: inside the runtime if extracted next to a bundled
+  // python/, otherwise the extractor python under resources
+  const venvPythonDir = fs.existsSync(path.join(runtime, 'python'))
+    ? path.join(runtime, 'python')
+    : path.join(resourcesPath, 'music', 'python');
+  bootstrapVenv(runtime, venvPythonDir);
 
   if (opts.modelsDir) {
     try { fs.mkdirSync(opts.modelsDir, { recursive: true }); } catch (e) {}
@@ -184,4 +224,4 @@ function stopAceServer() {
   }
 }
 
-module.exports = { ensureAceServer, stopAceServer, findRuntime, findRuntimeArchive, bootstrapVenv };
+module.exports = { ensureAceServer, stopAceServer, findRuntime, findRuntimeArchive, bootstrapVenv, defaultUserDataDir };
