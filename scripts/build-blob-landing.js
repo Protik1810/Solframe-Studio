@@ -36,8 +36,10 @@ const faviconUrl = copyAsset('public/favicon.png', 'favicon.png');
 const videoLoopUrl = copyAsset('public/video/solframe-brand-loop.mp4', 'video/solframe-brand-loop.mp4');
 const THEME_KEYS_BG = ['dark-void', 'neon-cyber', 'cinema-gold', 'synthwave', 'anime-fantasy', 'emerald-matrix'];
 const themeTracks = {};
+const themeVideos = {};
 for (const key of THEME_KEYS_BG) {
   themeTracks[`AUDIO_BG_${key}`] = copyAsset(`public/audio/bg_${key}.mp3`, `audio/bg_${key}.mp3`);
+  themeVideos[`VIDEO_BG_${key}`] = copyAsset(`public/video/bg_${key}.mp4`, `video/bg_${key}.mp4`);
 }
 // The footer links to these by relative path — without copying them here,
 // they 404 on the live site since docs/ never had them.
@@ -137,6 +139,7 @@ const replacements = {
   FAVICON_URL: faviconUrl,
   OG_IMAGE_URL: `${SITE_BASE_URL}${logoUrl}`,
   ...themeTracks,
+  ...themeVideos,
   VIDEO_BRAND_LOOP: videoLoopUrl,
   // electron-builder's productName ("Solframe Studio") has a space, and
   // GitHub replaces spaces with dots when it sanitizes uploaded release
