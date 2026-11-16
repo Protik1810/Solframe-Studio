@@ -6,7 +6,17 @@ import {
   MusicVideoStatus,
   MusicVideoStage,
   MusicVideoScene,
+  MusicVideoRuntimeInfo,
+  MusicRuntimeDownloadState,
 } from '../services/musicVideoApi';
+
+type MusicRuntimeFull = MusicVideoRuntimeInfo & { download: MusicRuntimeDownloadState };
+
+const fmtSize = (b: number): string => {
+  if (b >= 1024 * 1024 * 1024) return `${(b / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+  if (b >= 1024 * 1024) return `${(b / (1024 * 1024)).toFixed(0)} MB`;
+  return `${b} bytes`;
+};
 
 interface MusicVideoStudioProps {
   onError: (title: string, message: string) => void;
@@ -86,6 +96,28 @@ export function MusicVideoStudio(props: MusicVideoStudioProps) {
     })();
   }, []);
 
+  // Music runtime setup: poll while it's not installed (covers download and
+  // import progress); refresh config once it lands so the banner clears.
+  const [runtime, setRuntime] = useState<MusicRuntimeFull | null>(null);
+  const [importPath, setImportPath] = useState<string>('');
+  useEffect(() => {
+    let alive = true;
+    let iv: ReturnType<typeof setInterval> | null = null;
+    const tick = async () => {
+      const r = await musicVideoService.runtime();
+      if (!alive) return;
+      setRuntime(r);
+      if (r?.installed) {
+        const c = await musicVideoService.config();
+        if (alive) setConfig(c);
+        if (iv) { clearInterval(iv); iv = null; }
+      }
+    };
+    tick();
+    iv = setInterval(tick, 2000);
+    return () => { alive = false; if (iv) clearInterval(iv); };
+  }, []);
+
   // Poll job status every 2s while running; stops on done/error and on unmount
   useEffect(() => {
     if (!running || !jobId) return;
@@ -156,6 +188,13 @@ export function MusicVideoStudio(props: MusicVideoStudioProps) {
 
   const handleGenerate = async () => {
     if (running) return;
+    if (runtime && !runtime.installed && runtime.download.phase !== 'ready') {
+      onError(
+        'Music Pipeline Not Installed',
+        'The AI music engine needs a one-time ~2.0 GB runtime. Use the Music pipeline setup panel above to download it (or import a music-runtime.tar.xz you already have), then try again. It unpacks automatically on first use.'
+      );
+      return;
+    }
     if (mode === 'generate' && !songPrompt.trim()) {
       onError('Missing Song Prompt', 'Describe the song you want the AI to generate.');
       return;
@@ -339,6 +378,97 @@ export function MusicVideoStudio(props: MusicVideoStudioProps) {
 
       {/* ─── Controls ─────────────────────────────────────────────────────── */}
       <div className="glass-panel studio-controls" style={{ overflowY: 'auto' }}>
+        {/* Music runtime setup — one-time download or import */}
+        {runtime && !runtime.installed && (
+          <div
+            className="control-group"
+            style={{
+              border: '1px solid rgba(234, 179, 8, 0.35)',
+              background: 'rgba(234, 179, 8, 0.08)',
+              padding: '12px',
+              borderRadius: '10px',
+            }}
+          >
+            <div className="control-label" style={{ color: '#eab308' }}>
+              <Download size={12} style={{ verticalAlign: -2, marginRight: 4 }} />
+              Music pipeline setup
+            </div>
+            {runtime.download.phase === 'downloading' || runtime.download.phase === 'importing' ? (
+              <>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                  {runtime.download.phase === 'downloading' ? 'Downloading' : 'Importing'} music pipeline ({runtime.download.source === 'import' ? 'import' : 'from GitHub'}) —{' '}
+                  {runtime.download.total ? `${fmtSize(runtime.download.received)} / ${fmtSize(runtime.download.total)}` : fmtSize(runtime.download.received)}
+                </div>
+                <div style={{ height: '6px', borderRadius: '3px', background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                  <div
+                    style={{
+                      height: '100%',
+                      width: runtime.download.total ? `${Math.min(100, (runtime.download.received / runtime.download.total) * 100)}%` : '100%',
+                      background: 'var(--accent, #4ade80)',
+                      transition: 'width 0.5s ease',
+                      opacity: runtime.download.total ? 1 : 0.5,
+                    }}
+                  />
+                </div>
+              </>
+            ) : runtime.download.phase === 'ready' ? (
+              <div style={{ fontSize: '12px', color: 'var(--text-primary)' }}>
+                ✓ Music pipeline downloaded — it unpacks automatically the first time you generate music.
+              </div>
+            ) : runtime.download.phase === 'error' ? (
+              <>
+                <div style={{ fontSize: '12px', color: '#f87171', marginBottom: '8px' }}>
+                  {runtime.download.error || 'Music pipeline download failed.'}
+                </div>
+                <button
+                  className="btn-primary"
+                  style={{ fontSize: '12px', padding: '6px 14px' }}
+                  onClick={() => musicVideoService.startRuntimeDownload()}
+                >
+                  Retry download
+                </button>
+              </>
+            ) : runtime.archivePresent ? (
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                Music pipeline archive found ({fmtSize(runtime.archiveBytes)}) — it unpacks automatically on first use.
+              </div>
+            ) : (
+              <>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                  Music generation needs a one-time <strong>~2.0 GB</strong> runtime download (AI song engine — model weights are separate and free).
+                </div>
+                <button
+                  className="btn-primary"
+                  style={{ fontSize: '12px', padding: '6px 14px', marginRight: '8px' }}
+                  onClick={() => musicVideoService.startRuntimeDownload()}
+                >
+                  <Download size={12} style={{ verticalAlign: -2, marginRight: 4 }} />
+                  Download music pipeline
+                </button>
+                <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
+                  <input
+                    className="styled-input"
+                    style={{ flex: 1, fontSize: '11px' }}
+                    placeholder="…or import a downloaded music-runtime.tar.xz: paste its full path"
+                    value={importPath}
+                    onChange={(e) => setImportPath(e.target.value)}
+                  />
+                  <button
+                    className="btn-secondary"
+                    style={{ fontSize: '11px', padding: '4px 10px', whiteSpace: 'nowrap' }}
+                    onClick={async () => {
+                      if (!importPath.trim()) return;
+                      const r = await musicVideoService.importRuntime(importPath.trim());
+                      if (!r.ok) onError('Music Pipeline Import', r.error || 'Import failed.');
+                    }}
+                  >
+                    Import
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
         {/* Source */}
         <div className="control-group">
           <div className="control-label">Audio Source</div>

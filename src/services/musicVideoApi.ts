@@ -4,10 +4,27 @@
  * scene plan, stills, per-scene clips, final assembly.
  */
 
+export interface MusicVideoRuntimeInfo {
+  installed: boolean;
+  archivePresent: boolean;
+  archiveBytes: number;
+  downloadUrl?: string | null;
+  expectedArchivePath?: string | null;
+}
+
 export interface MusicVideoConfig {
   ace: { url: string; configured: boolean };
   video: { ok: boolean };
   ffmpeg: { found: boolean };
+  runtime?: MusicVideoRuntimeInfo;
+}
+
+export interface MusicRuntimeDownloadState {
+  phase: 'idle' | 'downloading' | 'importing' | 'ready' | 'error';
+  received: number;
+  total: number;
+  error?: string | null;
+  source?: 'download' | 'import' | null;
 }
 
 export interface MusicVideoTitleCard {
@@ -36,15 +53,7 @@ export interface MusicVideoStartParams {
   generateSong?: MusicVideoGenerateSong;
 }
 
-export type MusicVideoStage =
-  | 'queued'
-  | 'song'
-  | 'plan'
-  | 'stills'
-  | 'clips'
-  | 'assemble'
-  | 'done'
-  | 'error';
+export type MusicVideoStage = 'queued' | 'song' | 'plan' | 'stills' | 'clips' | 'assemble' | 'done' | 'error';
 
 export interface MusicVideoScene {
   name: string;
@@ -75,7 +84,11 @@ export interface MusicVideoStatus {
 
 async function json(res: Response): Promise<any> {
   const text = await res.text();
-  try { return JSON.parse(text); } catch { return { error: text }; }
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { error: text };
+  }
 }
 
 export const musicVideoService = {
@@ -92,7 +105,7 @@ export const musicVideoService = {
     const r = await fetch('/api/musicvideo/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(params),
+      body: JSON.stringify(params)
     });
     const d = await json(r);
     if (!r.ok) {
@@ -115,7 +128,7 @@ export const musicVideoService = {
   async cancel(jobId: string): Promise<boolean> {
     try {
       const r = await fetch(`/api/musicvideo/cancel?job=${encodeURIComponent(jobId)}`, {
-        method: 'DELETE',
+        method: 'DELETE'
       });
       return r.ok;
     } catch {
@@ -126,4 +139,39 @@ export const musicVideoService = {
   fileUrl(name: string): string {
     return `/api/musicvideo/file/${encodeURIComponent(name)}`;
   },
+
+  /** Music runtime setup state (installed / archive / download progress). */
+  async runtime(): Promise<(MusicVideoRuntimeInfo & { download: MusicRuntimeDownloadState }) | null> {
+    try {
+      const r = await fetch('/api/musicvideo/runtime');
+      return await json(r);
+    } catch {
+      return null;
+    }
+  },
+
+  /** One-click: download the runtime archive from the release page. */
+  async startRuntimeDownload(): Promise<boolean> {
+    try {
+      const r = await fetch('/api/musicvideo/runtime/download', { method: 'POST' });
+      return r.ok;
+    } catch {
+      return false;
+    }
+  },
+
+  /** Import an already-downloaded music-runtime.tar.xz by path. */
+  async importRuntime(archivePath: string): Promise<{ ok: boolean; error?: string }> {
+    try {
+      const r = await fetch('/api/musicvideo/runtime/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ archivePath })
+      });
+      const d = await json(r);
+      return { ok: r.ok, error: r.ok ? undefined : d?.error || `HTTP ${r.status}` };
+    } catch (e: any) {
+      return { ok: false, error: e?.message || 'import failed' };
+    }
+  }
 };

@@ -242,4 +242,76 @@ function stopAceServer() {
   }
 }
 
-module.exports = { ensureAceServer, stopAceServer, findRuntime, findRuntimeArchive, bootstrapVenv, defaultUserDataDir };
+const RUNTIME_ASSET = 'music-runtime.tar.xz';
+const REPO_SLUG = 'Protik1810/Solframe-Studio';
+
+/** Release-asset URL for the runtime archive, keyed off the app's version. */
+function releaseDownloadUrl(rootDir) {
+  try {
+    const pkg = require(path.join(rootDir, 'package.json'));
+    return pkg && pkg.version
+      ? `https://github.com/${REPO_SLUG}/releases/download/v${pkg.version}/${RUNTIME_ASSET}`
+      : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * Where the music pipeline stands, for the tab's setup banner:
+ *   installed       — extracted runtime already usable
+ *   archivePresent  — archive on disk (user-data or bundled), extracts on
+ *                     first use
+ *   otherwise       — needs the release download (or an import)
+ */
+function runtimeStatus(rootDir, resourcesPath, opts = {}) {
+  const userDataDir = opts.userDataDir || defaultUserDataDir();
+  const rt = findRuntime(rootDir, resourcesPath, userDataDir);
+  const ar = findRuntimeArchive(resourcesPath, userDataDir);
+  const archivePath = ar ? ar.archive : path.join(userDataDir, RUNTIME_ASSET);
+  let archiveBytes = 0;
+  try { archiveBytes = fs.existsSync(archivePath) ? fs.statSync(archivePath).size : 0; } catch (e) {}
+  return {
+    installed: !!rt,
+    runtimeDir: rt || null,
+    archivePresent: !!ar,
+    archivePath: ar ? ar.archive : null,
+    expectedArchivePath: archivePath,
+    archiveBytes,
+    destDir: ar ? ar.destDir : path.join(userDataDir, 'music'),
+    downloadUrl: releaseDownloadUrl(rootDir),
+  };
+}
+
+/**
+ * Stream the runtime archive from the release page to destPath. Uses Node's
+ * own fetch (same stance as the HF downloader — no external curl). Progress
+ * is reported through onProgress(received, totalBytes).
+ */
+async function downloadRuntimeArchive(url, destPath, onProgress) {
+  const res = await fetch(url, { redirect: 'follow' });
+  if (!res.ok || !res.body) {
+    throw new Error(`runtime download failed: HTTP ${res.status} for ${url}`);
+  }
+  fs.mkdirSync(path.dirname(destPath), { recursive: true });
+  const total = Number(res.headers.get('content-length')) || 0;
+  let received = 0;
+  const out = fs.createWriteStream(destPath);
+  await new Promise((resolve, reject) => {
+    res.body.on('data', (chunk) => {
+      received += chunk.length;
+      out.write(chunk);
+      if (onProgress) { try { onProgress(received, total); } catch (e) {} }
+    });
+    res.body.on('error', reject);
+    res.body.on('end', () => out.end(resolve));
+    out.on('error', reject);
+  });
+  if (received < 1024 * 1024) {
+    try { fs.unlinkSync(destPath); } catch (e) {}
+    throw new Error(`runtime download too small (${received} bytes) — aborted`);
+  }
+  return { destPath, bytes: received };
+}
+
+module.exports = { ensureAceServer, stopAceServer, findRuntime, findRuntimeArchive, bootstrapVenv, defaultUserDataDir, runtimeStatus, downloadRuntimeArchive };

@@ -34,7 +34,14 @@ const _mb = [
   path.join(__dirname, '..', '..', 'electron', 'engine', 'music_backend.cjs'),
   path.join(__dirname, 'music_backend.cjs'),
 ].find(p => { try { return fs.existsSync(p); } catch { return false; } });
-const { ensureAceServer } = require(_mb || path.join(__dirname, 'music_backend.cjs'));
+const _mbm = require(_mb || path.join(__dirname, 'music_backend.cjs'));
+const {
+  ensureAceServer,
+  runtimeStatus: _runtimeStatus,
+  downloadRuntimeArchive: _downloadRuntimeArchive,
+} = _mbm;
+const runtimeStatus = _runtimeStatus || (() => ({ installed: false, archivePresent: false, downloadUrl: null }));
+const downloadRuntimeArchive = _downloadRuntimeArchive || null;
 
 const ACE_HOST = '127.0.0.1';
 const ACE_PORT_DEFAULT = 8001;
@@ -475,6 +482,42 @@ async function runPipeline(job, spec, cfg, ctx) {
 }
 
 // ─── request handling ──────────────────────────────────────────────────────
+// music runtime acquisition state (module-level: survives across requests;
+// one download/import at a time)
+const runtimeDownload = {
+  phase: 'idle', // idle | downloading | importing | ready | error
+  received: 0,
+  total: 0,
+  error: null,
+  source: null, // 'download' | 'import'
+  startedAt: 0,
+  finishedAt: 0,
+};
+
+function startRuntimeAcquire(source, fn) {
+  runtimeDownload.phase = source === 'download' ? 'downloading' : 'importing';
+  runtimeDownload.received = 0;
+  runtimeDownload.total = 0;
+  runtimeDownload.error = null;
+  runtimeDownload.source = source;
+  runtimeDownload.startedAt = Date.now();
+  runtimeDownload.finishedAt = 0;
+  (async () => {
+    try {
+      await fn((received, total) => {
+        runtimeDownload.received = received;
+        if (total) runtimeDownload.total = total;
+      });
+      runtimeDownload.phase = 'ready';
+      runtimeDownload.finishedAt = Date.now();
+    } catch (e) {
+      runtimeDownload.phase = 'error';
+      runtimeDownload.error = e.message;
+      runtimeDownload.finishedAt = Date.now();
+    }
+  })();
+}
+
 async function handleMusicVideoApi(req, res, ctx = {}) {
   const cfg = readConfig(ctx.rootDir, ctx.resourcesPath);
   const outDir = jobDir(ctx.userOutputsDir || ctx.rootDir || process.cwd());
@@ -488,12 +531,86 @@ async function handleMusicVideoApi(req, res, ctx = {}) {
     let ace = false;
     try { const h = await httpJson(`${cfg.aceUrl}/health`, 'GET', null, {}, 4000); ace = h.status === 200; } catch (e) {}
     const video = await probePort(cfg.videoPort);
+    const rt = runtimeStatus(ctx.rootDir, ctx.resourcesPath);
     return sendJson(200, {
       ace: { url: cfg.aceUrl, configured: ace },
       video: { ok: video },
       ffmpeg: { found: !!cfg.ffmpegPath },
       imageModel: cfg.imageModel || null,
+      runtime: {
+        installed: !!rt.installed,
+        archivePresent: !!rt.archivePresent,
+        archiveBytes: rt.archiveBytes || 0,
+        downloadUrl: rt.downloadUrl || null,
+        expectedArchivePath: rt.expectedArchivePath || null,
+      },
     });
+  }
+  if (pathname === '/runtime' && req.method === 'GET') {
+    const rt = runtimeStatus(ctx.rootDir, ctx.resourcesPath);
+    return sendJson(200, {
+      ...rt,
+      download: {
+        phase: runtimeDownload.phase,
+        received: runtimeDownload.received,
+        total: runtimeDownload.total,
+        error: runtimeDownload.error,
+        source: runtimeDownload.source,
+      },
+    });
+  }
+  if (pathname === '/runtime/download' && req.method === 'POST') {
+    if (!downloadRuntimeArchive) return sendJson(501, { error: 'runtime download not supported by this backend' });
+    const rt = runtimeStatus(ctx.rootDir, ctx.resourcesPath);
+    if (rt.installed) return sendJson(200, { ok: true, message: 'runtime already installed' });
+    if (runtimeDownload.phase === 'downloading' || runtimeDownload.phase === 'importing') {
+      return sendJson(200, { ok: true, message: `already ${runtimeDownload.phase}` });
+    }
+    if (!rt.downloadUrl) return sendJson(400, { error: 'no download URL — app version unknown' });
+    startRuntimeAcquire('download', (onProgress) =>
+      downloadRuntimeArchive(rt.downloadUrl, rt.expectedArchivePath, onProgress));
+    return sendJson(202, { ok: true, url: rt.downloadUrl, dest: rt.expectedArchivePath });
+  }
+  if (pathname === '/runtime/import' && req.method === 'POST') {
+    if (runtimeDownload.phase === 'downloading' || runtimeDownload.phase === 'importing') {
+      return sendJson(409, { error: `another acquisition is ${runtimeDownload.phase}` });
+    }
+    const chunks = [];
+    req.on('data', (c) => chunks.push(c));
+    req.on('end', () => {
+      let body;
+      try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
+      catch (e) { return sendJson(400, { error: 'invalid JSON body' }); }
+      const src = typeof body.archivePath === 'string' ? body.archivePath.trim() : '';
+      if (!src) return sendJson(400, { error: 'archivePath required' });
+      let st;
+      try { st = fs.statSync(src); } catch (e) { return sendJson(400, { error: `file not found: ${src}` }); }
+      if (!st.isFile()) return sendJson(400, { error: `not a file: ${src}` });
+      if (st.size < 1024 * 1024) return sendJson(400, { error: `file too small (${st.size} bytes) to be the music runtime` });
+      const rt = runtimeStatus(ctx.rootDir, ctx.resourcesPath);
+      if (rt.installed) return sendJson(200, { ok: true, message: 'runtime already installed' });
+      const dest = rt.expectedArchivePath;
+      if (path.resolve(src) === path.resolve(dest)) return sendJson(200, { ok: true, message: 'already in place' });
+      startRuntimeAcquire('import', async (onProgress) => {
+        await new Promise((resolve, reject) => {
+          let tick;
+          const begin = () => {
+            fs.mkdirSync(path.dirname(dest), { recursive: true });
+            tick = setInterval(() => {
+              try { onProgress(fs.statSync(dest).size, st.size); } catch (e) {}
+            }, 500);
+            fs.copyFile(src, dest, (err) => {
+              clearInterval(tick);
+              err ? reject(err) : resolve();
+            });
+          };
+          begin();
+        });
+        return { dest, bytes: st.size };
+      });
+      return sendJson(202, { ok: true, dest });
+    });
+    return;
   }
   if (pathname === '/start' && req.method === 'POST') {
     const chunks = [];
