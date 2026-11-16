@@ -91,12 +91,18 @@
           "filter": [
             "**/*",
             "!music/**",
-            "!music-runtime.tar.xz"
+            "!music-runtime.tar.xz",
+            "!video/**",
+            "!video-runtime.tar.xz"
           ]
         },
         {
           "from": "backend/win/music/python",
           "to": "music/python"
+        },
+        {
+          "from": "backend/win/video-runtime.tar.xz",
+          "to": "video-runtime.tar.xz"
         }
       ],
       "target": [

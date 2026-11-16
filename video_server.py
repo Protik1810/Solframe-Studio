@@ -55,11 +55,24 @@ from pathlib import Path
 from urllib.parse import urlparse, unquote
 
 # ---------------------------------------------------------------- config ----
-REPO_ROOT = Path(r"D:\genimg_comic")
-CONFIG_PATH = Path(r"D:\genimg_comic\video_server.json")
-MODEL_DIR = Path(r"D:\models\LTX-Video-0.9.5")
-WAN_MODEL_DIR = Path(r"D:\models\Wan2.2-TI2V-5B-Diffusers")
-FREEVIDEO_ROOT = Path(r"D:\ComfyUI\ComfyUI_windows_portable\ComfyUI\custom_nodes\FreeVideo")
+# Path resolution: env overrides first (used by the packaged runtime extracted
+# into ~/SolframeStudio/video), then the dev-machine defaults. All model dirs
+# are user-downloadable weights — never bundled.
+def _env_path(name, fallback):
+    v = os.environ.get(name)
+    return Path(v) if v else Path(fallback)
+
+REPO_ROOT = _env_path("SOLFRAME_VIDEO_ROOT", r"D:\genimg_comic")
+CONFIG_PATH = _env_path("SOLFRAME_VIDEO_CONFIG", REPO_ROOT / "video_server.json")
+MODELS_ROOT = _env_path("SOLFRAME_VIDEO_MODELS", "")
+if str(MODELS_ROOT):
+    MODEL_DIR = MODELS_ROOT / "LTX-Video-0.9.5"
+    WAN_MODEL_DIR = MODELS_ROOT / "Wan2.2-TI2V-5B-Diffusers"
+    FREEVIDEO_ROOT = MODELS_ROOT / "FreeVideo"
+else:
+    MODEL_DIR = _env_path("SOLFRAME_LTX_DIR", r"D:\models\LTX-Video-0.9.5")
+    WAN_MODEL_DIR = _env_path("SOLFRAME_WAN_DIR", r"D:\models\Wan2.2-TI2V-5B-Diffusers")
+    FREEVIDEO_ROOT = _env_path("SOLFRAME_FREEVIDEO_ROOT", r"D:\ComfyUI\ComfyUI_windows_portable\ComfyUI\custom_nodes\FreeVideo")
 H3_MODEL_ID = "minimax-h3-freevideo"
 H3_MAX_SECONDS = 15.0   # single FreeVideo run; longer jobs are a v1.2 item
 OUT_DIR = REPO_ROOT / "outputs" / "videos"
