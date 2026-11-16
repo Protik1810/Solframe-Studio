@@ -23,6 +23,7 @@ The ambient loop in the Showcase section is a **Solframe-made video**: a 6-secon
 ### 🔧 For everyone
 
 - **New packaging**: per-platform installers again — Windows NSIS, Linux `.deb` **and** `.AppImage`, macOS `.dmg`.
+- **Windows music split**: GitHub caps release assets at 2 GiB, so the Setup.exe bundles the image, video and chat engines while the ACE-Step music runtime (~2.0 GB) ships as a companion `music-runtime.tar.xz` — grab it from the release page, or let the Music tab download it in-app (or import a copy you already have). The app unpacks it automatically the first time you generate music.
 - The Music Video orchestrator (`music_video.cjs`) now ships correctly in **packaged builds** (the `video_backend.cjs` module resolution that v1.1.5 fixed for the video tab applies to the music pipeline too).
 
 ---
