@@ -30,6 +30,12 @@ const _vb = [
 ].find(p => { try { return fs.existsSync(p); } catch { return false; } });
 const { ensureVideoServer, probePort, stopVideoServer } = require(_vb || path.join(__dirname, '..', '..', 'video_backend.cjs'));
 
+const _mb = [
+  path.join(__dirname, '..', '..', 'electron', 'engine', 'music_backend.cjs'),
+  path.join(__dirname, 'music_backend.cjs'),
+].find(p => { try { return fs.existsSync(p); } catch { return false; } });
+const { ensureAceServer } = require(_mb || path.join(__dirname, 'music_backend.cjs'));
+
 const ACE_HOST = '127.0.0.1';
 const ACE_PORT_DEFAULT = 8001;
 const VIDEO_PORT = 8766;
@@ -83,6 +89,11 @@ function readConfig(rootDir, resourcesPath) {
   return {
     aceUrl: cfg.aceUrl || `http://${ACE_HOST}:${ACE_PORT_DEFAULT}`,
     aceApiKey: typeof cfg.aceApiKey === 'string' ? cfg.aceApiKey : '',
+    // weights for the bundled music engine live in a stable, writable,
+    // app-managed location (HF-downloaded via Model Manager)
+    musicModelsDir: cfg.musicModelsDir
+      || process.env.SOLFRAME_MUSIC_MODELS
+      || path.join(os.homedir(), 'SolframeStudio', 'music-models'),
     videoPort: Number(cfg.videoPort) || VIDEO_PORT,
     videoApiKey,
     imageModel: typeof cfg.imageModel === 'string' ? cfg.imageModel : '',
@@ -269,6 +280,17 @@ async function runPipeline(job, spec, cfg, ctx) {
   guard();
   if (spec.generateSong && spec.generateSong.enabled) {
     if (!spec.songPrompt) throw new Error('songPrompt required when generateSong is enabled');
+    // Music engine lives INSIDE the app since v1.2.0: if no ACE server is
+    // running, start the bundled one (resources/music) before submitting.
+    const ace = await ensureAceServer(ctx.rootDir, ctx.resourcesPath, {
+      aceUrl: cfg.aceUrl,
+      modelsDir: cfg.musicModelsDir,
+    });
+    if (!ace.ok) {
+      throw new Error('Music engine unavailable: ' + (ace.error || 'ACE server not reachable')
+        + ' — download the music models in Model Manager and retry.');
+    }
+    job.log = (job.log || []).concat([`ACE-Step server: ${ace.source}`]);
     const r = await aceGenerateSong(cfg, job, spec);
     if (!r.audioUrl) throw new Error('ACE-Step returned no audio file');
     audioFile = path.join(dir, `${job.id}_song.wav`);

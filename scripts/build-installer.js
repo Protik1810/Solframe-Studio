@@ -36,19 +36,16 @@ function resolveIscc() {
     // without admin rights, which the two Program Files paths above miss.
     path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Inno Setup 6', 'ISCC.exe')
   ];
-  return standardLocations.find(p => fs.existsSync(p)) || null;
+  return standardLocations.find((p) => fs.existsSync(p)) || null;
 }
 
 const isccPath = resolveIscc();
 const issComplete = path.resolve(__dirname, '../installer.iss');
 const issLightweight = path.resolve(__dirname, '../installer-lightweight.iss');
 
-// --lightweight-only: skip the Complete installer. Used in CI, where the
-// CUDA/Vulkan/llama.cpp binaries the Complete installer bundles don't
-// exist in the checkout at all (deliberately not committed — see
-// .github/workflows/release-build.yml) — compiling installer.iss there
-// wouldn't fail, it would just silently produce a "Complete" installer
-// that's actually missing every acceleration engine.
+// --lightweight-only: kept for CI parity checks. The release ships ONE
+// Windows download (the Complete installer) per the v1.2.0 packaging policy —
+// Lightweight and Portable variants are no longer published.
 const lightweightOnly = process.argv.includes('--lightweight-only');
 
 if (!isccPath) {
@@ -58,13 +55,17 @@ if (!isccPath) {
 }
 
 if (!lightweightOnly) {
-  console.log(`\n🔨 [1/2] Compiling Complete Solframe Studio Setup Installer v${version} (.exe)...`);
+  console.log(`\n🔨 Compiling Complete Solframe Studio Setup Installer v${version} (.exe)...`);
   execSync(`"${isccPath}" "/DMyAppVersion=${version}" "${issComplete}"`, { stdio: 'inherit' });
-  console.log(`🎉 Complete Installer generated at: installer-output/Solframe-Studio-Setup-${version}.exe`);
+  console.log(`🎉 Installer generated at: installer-output/Solframe-Studio-Setup-${version}.exe`);
+} else {
+  console.log(`\n🔨 Compiling Lightweight Solframe Studio Setup Installer v${version} (.exe)...`);
+  execSync(`"${isccPath}" "/DMyAppVersion=${version}" "${issLightweight}"`, { stdio: 'inherit' });
+  console.log(
+    `🎉 Lightweight Installer generated at: installer-output/Solframe-Studio-Setup-${version}-Lightweight.exe`
+  );
 }
 
-console.log(`\n🔨 [${lightweightOnly ? '1/1' : '2/2'}] Compiling Lightweight Solframe Studio Setup Installer v${version} (.exe)...`);
-execSync(`"${isccPath}" "/DMyAppVersion=${version}" "${issLightweight}"`, { stdio: 'inherit' });
-console.log(`🎉 Lightweight Installer generated at: installer-output/Solframe-Studio-Setup-${version}-Lightweight.exe`);
-
-console.log(`\n✅ ${lightweightOnly ? 'Lightweight installer' : 'All installers'} successfully compiled and ready in installer-output/!`);
+console.log(
+  `\n✅ ${lightweightOnly ? 'Lightweight installer' : 'Installer'} successfully compiled and ready in installer-output/!`
+);
