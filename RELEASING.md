@@ -30,44 +30,66 @@ Don't publish it until you've finished the manual steps below.
 
 2. **Build the Windows Complete and Portable installers**, from a machine
    with real `backend/win/` engine binaries in place (`node
-   scripts/fetch-engines.js` if you don't have them already, or verify what
+scripts/fetch-engines.js` if you don't have them already, or verify what
    you have against `engines-lock.json`):
+
    ```bash
    npm run build:installer
    ```
 
-3. **Build the real macOS app**, from an actual Mac with `backend/mac/`
+3. **Build the Windows music runtime asset.** GitHub caps release assets at
+   2 GiB, so the ACE-Step runtime ships as its own release file instead of
+   inside the installer. Strip the MSVC `.lib` link libraries from the
+   staged venv first (the app only runs — nothing links at runtime), then
+   tar it:
+
+   ```bash
+   # on the build machine (git bash or equivalent)
+   find backend/win/music/venv -name '*.lib' -delete
+   (cd backend/win/music && tar -cJf ../music-runtime.tar.xz venv ace)
+   ```
+
+   The result must stay under 2 GiB. The app looks for
+   `music-runtime.tar.xz` in `%USERPROFILE%\SolframeStudio\` on first music
+   use and unpacks it there itself (`electron/engine/music_backend.cjs`).
+
+4. **Build the real macOS app**, from an actual Mac with `backend/mac/`
    populated (same `fetch-engines.js` command, run on macOS so it can
    actually unpack the archives — see the note in
    [CONTRIBUTING.md](CONTRIBUTING.md#a-note-on-the-inference-engines) about
    why that step fails on Windows):
+
    ```bash
    npm run electron:build:mac
    ```
+
    This produces the inference-capable `.zip`/`.dmg` — replace the
    UI-shell-only ones CI already attached to the draft with these.
 
-4. **Regenerate `CHECKSUMS.txt`** covering every final asset (not just the
-   CI-built subset) and upload it to the release, replacing the one CI
-   generated:
+5. **Regenerate `CHECKSUMS.txt`** covering every final asset (not just the
+   CI-built subset — it must include `music-runtime.tar.xz`) and upload it
+   to the release, replacing the one CI generated:
+
    ```bash
-   sha256sum Solframe-Studio-*.exe Solframe.Studio-*.zip *.AppImage *.deb > CHECKSUMS.txt
+   sha256sum Solframe-Studio-*.exe Solframe.Studio-*.zip *.AppImage *.deb music-runtime.tar.xz > CHECKSUMS.txt
    ```
+
    (`Get-FileHash -Algorithm SHA256` on Windows PowerShell if that's more
    convenient than a Git Bash/WSL shell.)
 
-5. **Upload everything to the draft release** — the two Windows installers
-   from step 2, the real macOS build from step 3, and the regenerated
-   `CHECKSUMS.txt` from step 4. Remove CI's placeholder body text and paste
-   in the relevant `RELEASE_NOTES.md` section.
+6. **Upload everything to the draft release** — the two Windows installers
+   and the music runtime asset from steps 2-3, the real macOS build from
+   step 4, and the regenerated `CHECKSUMS.txt` from step 5. Remove CI's
+   placeholder body text and paste in the relevant `RELEASE_NOTES.md`
+   section.
 
-6. **Rebuild the landing page** (`docs/index.html`) so its download links
+7. **Rebuild the landing page** (`docs/index.html`) so its download links
    and file sizes match this release — this happens automatically on the
    next push to `main` via `.github/workflows/pages.yml`, which also runs
    `scripts/check-release-links.js` to catch a broken download link before
    it goes live.
 
-7. **Review, then publish the draft.** Once every asset is attached and the
+8. **Review, then publish the draft.** Once every asset is attached and the
    body reads correctly, hit Publish on GitHub.
 
 ## Commit messages

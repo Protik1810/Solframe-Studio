@@ -114,6 +114,7 @@ function checksumTokens() {
 
   const wanted = {
     SHA_WIN_COMPLETE: `Solframe-Studio-Setup-${VERSION}.exe`,
+    SHA_WIN_MUSIC_RUNTIME: `music-runtime.tar.xz`,
     SHA_LINUX_DEB: `solframe-studio_${VERSION}_amd64.deb`,
     SHA_LINUX_APPIMAGE: `Solframe-Studio-${VERSION}.AppImage`,
     SHA_MAC_DMG_ARM64: `Solframe-Studio-${VERSION}-arm64.dmg`
@@ -151,6 +152,10 @@ const replacements = {
   // this file — the actual generator for the live download buttons — so
   // the Linux AppImage and macOS zip buttons were 404ing on the real site.
   DOWNLOAD_WIN_COMPLETE: `${RELEASE_BASE}/Solframe-Studio-Setup-${VERSION}.exe`,
+  // v1.2.0: GitHub caps release assets at 2 GiB, so the ACE-Step runtime
+  // ships as its own release asset; the app looks for it in
+  // %USERPROFILE%\SolframeStudio\ on first music use (music_backend.cjs).
+  DOWNLOAD_WIN_MUSIC_RUNTIME: `${RELEASE_BASE}/music-runtime.tar.xz`,
   DOWNLOAD_LINUX_DEB: `${RELEASE_BASE}/solframe-studio_${VERSION}_amd64.deb`,
   DOWNLOAD_LINUX_APPIMAGE: `${RELEASE_BASE}/Solframe-Studio-${VERSION}.AppImage`,
   DOWNLOAD_MAC_DMG_ARM64: `${RELEASE_BASE}/Solframe-Studio-${VERSION}-arm64.dmg`,

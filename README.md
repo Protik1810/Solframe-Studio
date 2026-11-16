@@ -204,7 +204,7 @@ Another edit, on a different reference image:
 
 ### 🎵 3. Music Video Studio (new in v1.2.0 — full AI music pipeline)
 
-- **Local Music Generation (ACE-Step)**: describe a track, get a complete song with synced `.lrc` lyrics — entirely on your GPU, no cloud API. The engine runtime ships **inside the installer**; weights (~9.6 GB for the turbo DiT + 5Hz LM) download once through the app.
+- **Local Music Generation (ACE-Step)**: describe a track, get a complete song with synced `.lrc` lyrics — entirely on your GPU, no cloud API. On Windows the engine runtime ships as a companion release asset (`music-runtime.tar.xz`) that the app unpacks for you on first use; weights (~9.6 GB for the turbo DiT + 5Hz LM) download once through the app.
 - **Five-Stage Pipeline**: Song → Scene plan (beats synced to lyrics) → Stills (image engine) → Clips (video engine) → Assemble (ffmpeg cross-fades) — one job, live stage/progress reporting.
 - **Bring Your Own Music**: skip song generation and upload your own audio; the pipeline still plans scenes and builds the video around it.
 - **Sample Mode & Thinking**: quick 20 s drafts for iterating on a prompt, with a deeper "thinking" pass for the final render.
@@ -277,7 +277,8 @@ Another edit, on a different reference image:
 
 Download the latest installer from [Releases](https://github.com/Protik1810/Solframe-Studio/releases/latest):
 
-- `Solframe-Studio-Setup-<version>.exe` — full installer (all backends)
+- `Solframe-Studio-Setup-<version>.exe` — full installer (all image/video/chat engines)
+- `music-runtime.tar.xz` — the ACE-Step music engine runtime (venv + engine source). **Download this too** and drop it in `%USERPROFILE%\SolframeStudio\` (create the folder if it's your first run): the app finds it there, unpacks it once (~2 min), and cleans nothing up afterwards — the archive can be deleted after the first successful music generation. The app needs no admin rights for any of this.
 - `Solframe-Studio-Setup-<version>-Lightweight.exe` — smaller download, **UI shell only, no image generation or local LLM chat**. There is currently no in-app way to fetch the missing engines afterward — use the Complete Installer if you need inference.
 
 There is currently no winget package; the links above are the only official builds.
@@ -372,9 +373,16 @@ npm run dev
 # Build production bundle
 npm run build
 
-# Windows: build the single branded Setup installer (all engines + music runtime;
+# Windows: build the branded Setup installer (all image/video/chat engines;
+# the music runtime is built separately — see scripts note below;
 # requires engine binaries in backend/win/ — see scripts/fetch-engines.js)
 npm run build:installer
+
+# Windows music runtime asset (uploads to the release page separately):
+# tar the staged venv + ace tree under backend/win/music/ with bsdtar:
+#   cd backend/win/music && tar -cJf ../music-runtime.tar.xz venv ace
+# (GitHub caps release assets at 2 GiB — keep it under, e.g. by stripping
+#  MSVC .lib link libraries from the staged venv first; the app only runs.)
 
 # Linux: build the AppImage (ships Vulkan/CPU engines; add CUDA via scripts/build-linux-cuda.sh)
 npm run electron:build:linux
