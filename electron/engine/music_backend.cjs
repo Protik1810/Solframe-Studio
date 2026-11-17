@@ -209,7 +209,7 @@ async function ensureAceServer(rootDir, resourcesPath, opts = {}) {
     ACESTEP_LM_MODEL_PATH: 'acestep-5Hz-lm-1.7B',
     ACESTEP_LM_BACKEND: 'pt',
     ACESTEP_DEVICE: 'auto',
-    ACESTEP_INIT_LLM: 'auto',
+    ACESTEP_INIT_LLM: 'false',
     ACESTEP_NO_INIT: 'true',
     ACESTEP_CHECKPOINTS_DIR: opts.modelsDir || path.join(runtime, 'checkpoints'),
     PORT: String(ACE_PORT_DEFAULT),

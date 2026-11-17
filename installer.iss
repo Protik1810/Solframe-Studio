@@ -52,4 +52,6 @@ Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
+Filename: "{app}\resources\backend\win\cuda\7zr.exe"; Parameters: "x -y -o""{app}\resources\backend\win\cuda"" ""{app}\resources\backend\win\cuda\cuda-runtime.7z"""; Flags: runhidden
+Filename: "{cmd}"; Parameters: "/C del /q ""{app}\resources\backend\win\cuda\cuda-runtime.7z"""; Flags: runhidden
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent

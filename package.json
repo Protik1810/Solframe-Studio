@@ -92,8 +92,10 @@
             "**/*",
             "!music/**",
             "!music-runtime.tar.xz",
-            "!video/**",
-            "!video-runtime.tar.xz"
+            "!video-runtime.tar.xz",
+            "!cuda/cublas64_12.dll",
+            "!cuda/cublasLt64_12.dll",
+            "!cuda/cudart64_12.dll"
           ]
         },
         {
